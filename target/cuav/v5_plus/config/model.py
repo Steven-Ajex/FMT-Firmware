@@ -52,5 +52,12 @@ elif vehicle_type == 'Template':
         'fms/template_fms',
         'control/template_controller',
     ]
+elif vehicle_type == 'Rocket':
+    MODELS = [
+        'plant/multicopter',
+        'ins/cf_ins',
+        'fms/rocket_fms',
+        'control/rocket_controller',
+    ]
 else:
     raise Exception("Wrong VEHICLE_TYPE %s defined" % vehicle_type)

@@ -1,11 +1,11 @@
 /*
  * File: rtmodel.h
  *
- * Code generated for Simulink model 'INS'.
+ * Code generated for Simulink model 'FMS'.
  *
- * Model version                  : 1.4112
+ * Model version                  : 1.2126
  * Simulink Coder version         : 9.0 (R2018b) 24-May-2018
- * C/C++ source code generated on : Thu Jul 11 11:01:11 2024
+ * C/C++ source code generated on : Thu Jul 11 16:23:36 2024
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: ARM Compatible->ARM Cortex
@@ -15,7 +15,7 @@
 
 #ifndef RTW_HEADER_rtmodel_h_
 #define RTW_HEADER_rtmodel_h_
-#include "INS.h"
+#include "FMS.h"
 
 /* Macros generated for backwards compatibility  */
 #ifndef rtmGetStopRequested
