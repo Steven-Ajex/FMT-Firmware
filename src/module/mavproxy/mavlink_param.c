@@ -33,6 +33,7 @@ static mav_param_list_t mavlink_param = {
 #else
     MAVLINK_PARAM_DEFINE(MAV_PROTO_VER, 1), /* Mavlink Version */
 #endif
+    MAVLINK_PARAM_DEFINE(SYS_HITL, 2), 
     MAVLINK_PARAM_DEFINE(MAV_RADIO_ID, 0),
     MAVLINK_PARAM_DEFINE(MAV_TYPE, MAV_TYPE_QUADROTOR),
     MAVLINK_PARAM_DEFINE(MAV_USEHILGPS, 0),
@@ -311,8 +312,12 @@ static void make_mavparam_msg(mavlink_message_t* msg_t, const mav_param_t* param
     mav_param_value.param_index = get_index(param);
     memset(mav_param_value.param_id, 0, 16);
     memcpy(mav_param_value.param_id, param->name, len < 16 ? len : 16);
-
-    mav_param_value.param_type = MAVLINK_TYPE_FLOAT;
+    if (param->value == 120 || param->value == 125 || param->value == 130 || param->value == 2) {
+        mav_param_value.param_type = MAVLINK_TYPE_INT8_T;
+    } else {
+        mav_param_value.param_type = MAVLINK_TYPE_FLOAT;
+    }
+    
     mav_param_value.param_value = param->value;
 
     mavlink_msg_param_value_encode(mavlink_system.sysid, mavlink_system.compid, msg_t, &mav_param_value);
@@ -328,10 +333,9 @@ fmt_err_t send_mavparam_by_name(char* name)
         if (mav_param == NULL) {
             return FMT_EEMPTY;
         }
-
         if (strcmp(mav_param->name, name) == 0) {
             make_mavparam_msg(&msg, mav_param);
-            mavproxy_send_immediate_msg(MAVPROXY_GCS_CHAN, &msg, true);
+            mavproxy_send_immediate_msg(MAVPROXY_OBC_CHAN, &msg, true);
             return FMT_EOK;
         }
     }
@@ -512,7 +516,7 @@ fmt_err_t mavlink_param_send(const param_t* param)
     }
 
     make_mavlink_param_msg(&msg, param);
-    mavproxy_send_immediate_msg(MAVPROXY_GCS_CHAN, &msg, false);
+    mavproxy_send_immediate_msg(MAVPROXY_OBC_CHAN, &msg, false);
 
     return FMT_EOK;
 }

@@ -34,7 +34,7 @@ target = "CUAV V5+"
     chan = 1
     type = "serial"
     name = "serial2"
-    baudrate = 115200
+    baudrate = 921600
 
 
 # Pilot CMD Configuration

@@ -21,6 +21,7 @@
 
 /* define parameters */
 static param_t __param_list[] = {
+//     PARAM_INT8(SYS_HITL, 2, false),
     /* GYRO_CAL = GYRO - OFFSET */
     PARAM_FLOAT(GYRO0_XOFF, 0.0, false),
     PARAM_FLOAT(GYRO0_YOFF, 0.0, false),
@@ -29,6 +30,7 @@ static param_t __param_list[] = {
 	           |  XX  XY  XZ |
 	   ROT_M = |  XY  YY  YZ |
 	           |  XZ  YZ  ZZ |   */
+//     PARAM_INT8(CAL_ACC0_ID, 120, false),    
     PARAM_FLOAT(ACC0_XOFF, 0.0, false),
     PARAM_FLOAT(ACC0_YOFF, 0.0, false),
     PARAM_FLOAT(ACC0_ZOFF, 0.0, false),
@@ -42,6 +44,7 @@ static param_t __param_list[] = {
 	           |  XX  XY  XZ |
 	   ROT_M = |  XY  YY  YZ |
 	           |  XZ  YZ  ZZ |   */
+//     PARAM_INT8(CAL_MAG0_ID, 130, false),
     PARAM_FLOAT(MAG0_XOFF, 0.0, false),
     PARAM_FLOAT(MAG0_YOFF, 0.0, false),
     PARAM_FLOAT(MAG0_ZOFF, 0.0, false),
@@ -52,6 +55,7 @@ static param_t __param_list[] = {
     PARAM_FLOAT(MAG0_XZSCALE, 0.0, false),
     PARAM_FLOAT(MAG0_YZSCALE, 0.0, false),
 
+//     PARAM_INT8(CAL_GYRO0_ID, 125, false),
     PARAM_FLOAT(GYRO1_XOFF, 0.0, false),
     PARAM_FLOAT(GYRO1_YOFF, 0.0, false),
     PARAM_FLOAT(GYRO1_ZOFF, 0.0, false),
