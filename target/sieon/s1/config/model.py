@@ -17,5 +17,19 @@ elif vehicle_type == 'Template':
         'fms/template_fms',
         'control/template_controller',
     ]
+elif vehicle_type == 'Boat':
+    MODELS = [
+        'plant/boat-test',
+        'ins/cf_ins',
+        'fms/boat_fms',
+        'control/boat_controller',
+    ]
+elif vehicle_type == 'Car_test':
+    MODELS = [
+        'plant/template_plant',
+        'ins/cf_ins',
+        'fms/car_test_fms',
+        'control/car_test_controller',
+    ]
 else:
     raise Exception("Wrong VEHICLE_TYPE %s defined" % vehicle_type)
