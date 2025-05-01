@@ -3,9 +3,9 @@
  *
  * Code generated for Simulink model 'FMS'.
  *
- * Model version                  : 1.2061
+ * Model version                  : 1.2305
  * Simulink Coder version         : 9.0 (R2018b) 24-May-2018
- * C/C++ source code generated on : Thu Apr  3 16:44:07 2025
+ * C/C++ source code generated on : Wed Apr 30 15:58:18 2025
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: ARM Compatible->ARM Cortex
@@ -455,7 +455,8 @@ typedef enum {
 typedef enum {
   MotionState_Hold = 0,                /* Default value */
   MotionState_Brake,
-  MotionState_Move
+  MotionState_Move,
+  MotionState_Keep
 } MotionState;
 
 #endif
@@ -492,8 +493,8 @@ typedef enum {
 
 #endif
 
-#ifndef DEFINED_TYPEDEF_FOR_struct_U5lw6bCUkWz4DxN5NeKa6F_
-#define DEFINED_TYPEDEF_FOR_struct_U5lw6bCUkWz4DxN5NeKa6F_
+#ifndef DEFINED_TYPEDEF_FOR_struct_TneGpl6isYNp9l2B8ROowD_
+#define DEFINED_TYPEDEF_FOR_struct_TneGpl6isYNp9l2B8ROowD_
 
 typedef struct {
   real32_T DISARM_OUT[16];
@@ -503,10 +504,11 @@ typedef struct {
   real32_T ACCEPT_R;
   real32_T MAX_VEL;
   real32_T AY_P;
+  real32_T U_P;
   real32_T YAW_P;
   uint16_T LOST_RETURN_TIME;
   uint8_T LOST_RETURN_EN;
-} struct_U5lw6bCUkWz4DxN5NeKa6F;
+} struct_TneGpl6isYNp9l2B8ROowD;
 
 #endif
 

@@ -3,9 +3,9 @@
  *
  * Code generated for Simulink model 'Plant'.
  *
- * Model version                  : 1.1286
+ * Model version                  : 1.1315
  * Simulink Coder version         : 9.0 (R2018b) 24-May-2018
- * C/C++ source code generated on : Thu Apr  3 16:36:54 2025
+ * C/C++ source code generated on : Wed Apr 30 15:59:39 2025
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: ARM Compatible->ARM Cortex
@@ -419,22 +419,22 @@ void RandSrcCreateSeeds_32(uint32_T initSeed, uint32_T seedArray[], int32_T
 void Plant_step(void)
 {
   real32_T rtb_Gain_g2;
-  real32_T rtb_Square2;
-  real32_T rtb_Product8;
+  real32_T rtb_Deg2Rad;
   real32_T rtb_Sum_nh[3];
-  real32_T rtb_Add_c;
+  real32_T rtb_Square2;
+  real32_T rtb_Add_ju;
   real32_T rtb_MathFunction1_c;
   real32_T rtb_Magnitude_Lookup_Table;
+  real32_T rtb_Product8;
   boolean_T rtb_FixPtRelationalOperator;
   real32_T rtb_MatrixConcatenate4[16];
-  real32_T rtb_Add_jo[3];
+  real32_T rtb_Add_n[3];
   real32_T rtb_Sum_b[3];
   boolean_T rtb_FixPtRelationalOperator_c;
   real32_T rtb_VectorConcatenate_f[9];
   real_T rtb_DataTypeConversion[3];
   real_T rtb_SumofElements;
   real_T rtb_SumofElements1;
-  real32_T rtb_Sum_jo;
   real32_T rtb_Product2_e;
   Barometer_Bus rtb_BusAssignment_i;
   GPS_uBlox_Bus rtb_BusAssignment_dk;
@@ -458,14 +458,14 @@ void Plant_step(void)
   real_T rtb_Divide2_idx_0;
   real_T rtb_Add_idx_1;
   real32_T rtb_DiscreteTimeIntegrator1_idx;
+  real32_T rtb_DiscreteTimeIntegrator1_i_0;
+  real32_T rtb_DiscreteTimeIntegrator1_i_1;
   real32_T rtb_Square_idx_1;
   real32_T rtb_vel_O_mPs_idx_2;
   real32_T rtb_vel_O_mPs_idx_1;
   real32_T rtb_vel_O_mPs_idx_0;
   real32_T rtb_Sum_n3_idx_2;
-  real32_T rtb_torque_B_Nm_idx_2;
   real32_T rtb_force_B_N_idx_1;
-  real32_T rtb_Sum_n3_idx_0;
   real32_T rtb_force_B_N_idx_0;
   real32_T rtb_omega_B_radPs_idx_2;
   real32_T rtb_omega_B_radPs_idx_1;
@@ -480,14 +480,41 @@ void Plant_step(void)
   real32_T rtb_Gain_d_tmp;
   real32_T rtb_Gain_d_tmp_0;
   real32_T rtb_Gain_d_tmp_1;
+  real32_T rtb_Gain_d_tmp_2;
+  real32_T rtb_Gain_d_tmp_3;
+  real32_T rtb_Gain_d_tmp_4;
 
   /* Outputs for Atomic SubSystem: '<Root>/Actuators' */
-  /* Bias: '<S7>/Bias' incorporates:
-   *  Gain: '<S7>/Gain'
+  /* Bias: '<S6>/Bias' incorporates:
+   *  Gain: '<S6>/Gain'
+   *  Gain: '<S6>/Gain1'
    *  Inport: '<Root>/Control_Out'
+   *  Sum: '<S6>/Add'
    */
-  rtb_Gain_g2 = 0.180000305F * (real32_T)Plant_U.Control_Out.actuator_cmd[1] +
-    -270.0F;
+  rtb_Gain_g2 = (real32_T)((uint32_T)(uint16_T)((uint32_T)
+    Plant_U.Control_Out.actuator_cmd[0] + Plant_U.Control_Out.actuator_cmd[1]) <<
+    15) * 1.52587891E-5F * 0.0404F + -60.6F;
+
+  /* DeadZone: '<S6>/Dead Zone' */
+  if (rtb_Gain_g2 > 1.0F) {
+    /* Reshape: '<S1>/Reshape' */
+    rtb_act_force[0] = rtb_Gain_g2 - 1.0F;
+  } else if (rtb_Gain_g2 >= -1.0F) {
+    /* Reshape: '<S1>/Reshape' */
+    rtb_act_force[0] = 0.0F;
+  } else {
+    /* Reshape: '<S1>/Reshape' */
+    rtb_act_force[0] = rtb_Gain_g2 - -1.0F;
+  }
+
+  /* End of DeadZone: '<S6>/Dead Zone' */
+
+  /* Gain: '<S7>/Gain' incorporates:
+   *  Inport: '<Root>/Control_Out'
+   *  Sum: '<S7>/Subtract'
+   */
+  rtb_Gain_g2 = (real32_T)(Plant_U.Control_Out.actuator_cmd[0] -
+    Plant_U.Control_Out.actuator_cmd[1]) * -0.225F;
 
   /* DeadZone: '<S7>/Dead Zone' */
   if (rtb_Gain_g2 > 2.0F) {
@@ -512,56 +539,11 @@ void Plant_step(void)
   /* End of Saturate: '<S7>/Saturation' */
 
   /* Gain: '<S7>/Deg2Rad' */
-  rtb_Gain_g2 *= 0.0174532924F;
-
-  /* Bias: '<S6>/Bias' incorporates:
-   *  Gain: '<S6>/Gain'
-   *  Inport: '<Root>/Control_Out'
-   */
-  rtb_Square2 = 0.0403995514F * (real32_T)Plant_U.Control_Out.actuator_cmd[0] +
-    -60.6F;
-
-  /* DeadZone: '<S6>/Dead Zone' */
-  if (rtb_Square2 > 1.0F) {
-    rtb_Square2--;
-  } else if (rtb_Square2 >= -1.0F) {
-    rtb_Square2 = 0.0F;
-  } else {
-    rtb_Square2++;
-  }
-
-  /* End of DeadZone: '<S6>/Dead Zone' */
-
-  /* Product: '<S1>/Multiply' incorporates:
-   *  Trigonometry: '<S1>/Cos'
-   */
-  rtb_Product8 = rtb_Square2 * arm_cos_f32(rtb_Gain_g2);
-
-  /* Product: '<S1>/Multiply1' incorporates:
-   *  Trigonometry: '<S1>/Cos1'
-   */
-  rtb_Square2 *= arm_sin_f32(rtb_Gain_g2);
-
-  /* Reshape: '<S1>/Reshape' */
-  rtb_act_force[1] = rtb_Square2;
-
-  /* Gain: '<S1>/d' */
-  rtb_Square2 *= 0.25F;
-
-  /* Outputs for Atomic SubSystem: '<Root>/Environment' */
-  /* Sum: '<S3>/Sum' incorporates:
-   *  Abs: '<S20>/Abs2'
-   *  Constant: '<S20>/Constant4'
-   *  Delay: '<Root>/Delay'
-   *  Product: '<S20>/Multiply6'
-   *  Reshape: '<S1>/Reshape1'
-   *  Sum: '<S20>/Sum2'
-   */
-  rtb_torque_B_Nm_idx_2 = (-4.0F - fabsf(Plant_Y.Plant_States.rot_z_B)) *
-    Plant_Y.Plant_States.rot_z_B + rtb_Square2;
+  rtb_Deg2Rad = 0.0174532924F * rtb_Gain_g2;
 
   /* End of Outputs for SubSystem: '<Root>/Actuators' */
 
+  /* Outputs for Atomic SubSystem: '<Root>/Environment' */
   /* Product: '<S18>/Multiply' incorporates:
    *  Delay: '<Root>/Delay'
    *  SignalConversion: '<S18>/TmpSignal ConversionAtMultiplyInport2'
@@ -575,7 +557,6 @@ void Plant_step(void)
 
   /* End of Product: '<S18>/Multiply' */
 
-  /* Outputs for Atomic SubSystem: '<Root>/Actuators' */
   /* Sum: '<S3>/Sum1' incorporates:
    *  Abs: '<S19>/Abs'
    *  Abs: '<S19>/Abs1'
@@ -592,18 +573,15 @@ void Plant_step(void)
    *  Product: '<S19>/Multiply3'
    *  Product: '<S19>/Multiply4'
    *  Product: '<S19>/Multiply5'
-   *  Reshape: '<S1>/Reshape'
    *  Sum: '<S19>/Sum'
    *  Sum: '<S19>/Sum1'
    *  Sum: '<S19>/Sum2'
    *  Sum: '<S19>/Sum3'
    */
   rtb_force_B_N_idx_0 = ((-1.0F - 0.5F * fabsf(rtb_Sum_nh[0])) * rtb_Sum_nh[0] -
-    Plant_Y.Plant_States.rot_z_B * rtb_Sum_nh[1] * 3.4418F) + rtb_Product8;
-
-  /* End of Outputs for SubSystem: '<Root>/Actuators' */
-  rtb_force_B_N_idx_1 = ((-10.0F - 5.0F * fabsf(rtb_Sum_nh[1])) * rtb_Sum_nh[1]
-    + Plant_Y.Plant_States.rot_z_B * rtb_Sum_nh[0] * 2.1512F) + rtb_act_force[1];
+    Plant_Y.Plant_States.rot_z_B * rtb_Sum_nh[1] * 3.4418F) + rtb_act_force[0];
+  rtb_force_B_N_idx_1 = (-10.0F - 5.0F * fabsf(rtb_Sum_nh[1])) * rtb_Sum_nh[1] +
+    Plant_Y.Plant_States.rot_z_B * rtb_Sum_nh[0] * 2.1512F;
 
   /* End of Outputs for SubSystem: '<Root>/Environment' */
 
@@ -616,7 +594,7 @@ void Plant_step(void)
   rtb_act_force[2] = 0.5F * Plant_U.States_Init.euler[2];
 
   /* Trigonometry: '<S25>/Cos' */
-  rtb_Add_c = arm_cos_f32(rtb_act_force[0]);
+  rtb_Add_ju = arm_cos_f32(rtb_act_force[0]);
 
   /* Trigonometry: '<S25>/Cos1' */
   rtb_MathFunction1_c = arm_cos_f32(rtb_act_force[1]);
@@ -636,7 +614,7 @@ void Plant_step(void)
   /* Product: '<S25>/Multiply' incorporates:
    *  Product: '<S25>/Multiply6'
    */
-  rtb_Product2_e = rtb_Add_c * rtb_MathFunction1_c;
+  rtb_Product2_e = rtb_Add_ju * rtb_MathFunction1_c;
 
   /* Product: '<S25>/Multiply1' incorporates:
    *  Product: '<S25>/Multiply7'
@@ -654,7 +632,7 @@ void Plant_step(void)
   /* Product: '<S25>/Multiply3' incorporates:
    *  Product: '<S25>/Multiply4'
    */
-  rtb_Add_c *= rtb_Square2;
+  rtb_Add_ju *= rtb_Square2;
 
   /* Product: '<S25>/Multiply2' incorporates:
    *  Product: '<S25>/Multiply5'
@@ -673,8 +651,8 @@ void Plant_step(void)
    *  Sum: '<S25>/Subtract1'
    */
   rtb_TrigonometricFunction1_id_1 = rtb_MathFunction1_c *
-    rtb_Magnitude_Lookup_Table - rtb_Add_c * rtb_Gain_g2;
-  rtb_TrigonometricFunction1_id_0 = rtb_Add_c * rtb_Magnitude_Lookup_Table +
+    rtb_Magnitude_Lookup_Table - rtb_Add_ju * rtb_Gain_g2;
+  rtb_TrigonometricFunction1_id_0 = rtb_Add_ju * rtb_Magnitude_Lookup_Table +
     rtb_MathFunction1_c * rtb_Gain_g2;
   rtb_TrigonometricFunction1_idx_ = rtb_Product2_e * rtb_Gain_g2 -
     rtb_Square_idx_1 * rtb_Magnitude_Lookup_Table;
@@ -883,7 +861,7 @@ void Plant_step(void)
    */
   rtb_Product2_e = Plant_DW.DiscreteTimeIntegrator_DSTAT_p4[0] /
     rtb_Sum_n3_idx_2;
-  rtb_Add_c = Plant_DW.DiscreteTimeIntegrator_DSTAT_p4[1] / rtb_Sum_n3_idx_2;
+  rtb_Add_ju = Plant_DW.DiscreteTimeIntegrator_DSTAT_p4[1] / rtb_Sum_n3_idx_2;
   rtb_TrigonometricFunction1_id_3 = Plant_DW.DiscreteTimeIntegrator_DSTAT_p4[2] /
     rtb_Sum_n3_idx_2;
   rtb_TrigonometricFunction1_id_4 = Plant_DW.DiscreteTimeIntegrator_DSTAT_p4[3] /
@@ -917,7 +895,7 @@ void Plant_step(void)
    *  DiscreteIntegrator: '<S21>/Discrete-Time Integrator'
    */
   for (i = 0; i < 3; i++) {
-    rtb_Add_jo[i] = Plant_ConstP.Inertia_Matrix_Value[i + 6] *
+    rtb_Add_n[i] = Plant_ConstP.Inertia_Matrix_Value[i + 6] *
       Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[2] +
       (Plant_ConstP.Inertia_Matrix_Value[i + 3] *
        Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[1] +
@@ -930,32 +908,32 @@ void Plant_step(void)
   /* Product: '<S28>/Multiply' incorporates:
    *  DiscreteIntegrator: '<S21>/Discrete-Time Integrator'
    */
-  rtb_Sum_b[0] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[1] * rtb_Add_jo[2];
+  rtb_Sum_b[0] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[1] * rtb_Add_n[2];
 
   /* Product: '<S28>/Multiply1' incorporates:
    *  DiscreteIntegrator: '<S21>/Discrete-Time Integrator'
    */
-  rtb_Sum_b[1] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[2] * rtb_Add_jo[0];
+  rtb_Sum_b[1] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[2] * rtb_Add_n[0];
 
   /* Product: '<S28>/Multiply2' incorporates:
    *  DiscreteIntegrator: '<S21>/Discrete-Time Integrator'
    */
-  rtb_Sum_b[2] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[0] * rtb_Add_jo[1];
+  rtb_Sum_b[2] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[0] * rtb_Add_n[1];
 
   /* Product: '<S29>/Multiply3' incorporates:
    *  DiscreteIntegrator: '<S21>/Discrete-Time Integrator'
    */
-  rtb_Sum_nh[0] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[2] * rtb_Add_jo[1];
+  rtb_Sum_nh[0] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[2] * rtb_Add_n[1];
 
   /* Product: '<S29>/Multiply4' incorporates:
    *  DiscreteIntegrator: '<S21>/Discrete-Time Integrator'
    */
-  rtb_Sum_nh[1] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[0] * rtb_Add_jo[2];
+  rtb_Sum_nh[1] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[0] * rtb_Add_n[2];
 
   /* Product: '<S29>/Multiply5' incorporates:
    *  DiscreteIntegrator: '<S21>/Discrete-Time Integrator'
    */
-  rtb_Sum_nh[2] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[1] * rtb_Add_jo[0];
+  rtb_Sum_nh[2] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[1] * rtb_Add_n[0];
 
   /* RelationalOperator: '<S38>/FixPt Relational Operator' incorporates:
    *  Inport: '<Root>/States_Init'
@@ -1006,20 +984,19 @@ void Plant_step(void)
    *  Product: '<S46>/Product2'
    *  Sum: '<S45>/Sum1'
    */
-  rtb_DiscreteTimeIntegrator1_idx = 0.5F - rtb_Divide_o_idx_1 *
-    rtb_Divide_o_idx_1;
+  rtb_Gain_d_tmp_1 = 0.5F - rtb_Divide_o_idx_1 * rtb_Divide_o_idx_1;
 
   /* Product: '<S46>/Product1' incorporates:
    *  Product: '<S43>/Divide'
    *  Product: '<S45>/Product2'
    */
-  rtb_Sum_jo = rtb_Divide_o_idx_0 * rtb_Divide_o_idx_1;
+  rtb_Gain_d_tmp_3 = rtb_Divide_o_idx_0 * rtb_Divide_o_idx_1;
 
   /* Product: '<S46>/Product9' incorporates:
    *  Product: '<S43>/Divide'
    *  Product: '<S45>/Product3'
    */
-  rtb_Sum_n3_idx_0 = rtb_Divide_o_idx_2 * rtb_Divide_o_idx_3;
+  rtb_Gain_d_tmp_4 = rtb_Divide_o_idx_2 * rtb_Divide_o_idx_3;
 
   /* Sum: '<S46>/Sum' incorporates:
    *  DiscreteIntegrator: '<S22>/Discrete-Time Integrator'
@@ -1039,15 +1016,15 @@ void Plant_step(void)
    *  Sum: '<S46>/Sum3'
    */
   rtb_Gain_g2 = ((rtb_Gain_d_tmp + rtb_Gain_d_tmp_0) * 2.0F *
-                 Plant_DW.DiscreteTimeIntegrator_DSTATE_a[0] + (rtb_Sum_n3_idx_0
-    - rtb_Sum_jo) * 2.0F * Plant_DW.DiscreteTimeIntegrator_DSTATE_a[1]) +
-    (rtb_DiscreteTimeIntegrator1_idx - rtb_Sum_n3_idx_2) * 2.0F *
+                 Plant_DW.DiscreteTimeIntegrator_DSTATE_a[0] + (rtb_Gain_d_tmp_4
+    - rtb_Gain_d_tmp_3) * 2.0F * Plant_DW.DiscreteTimeIntegrator_DSTATE_a[1]) +
+    (rtb_Gain_d_tmp_1 - rtb_Sum_n3_idx_2) * 2.0F *
     Plant_DW.DiscreteTimeIntegrator_DSTATE_a[2];
 
   /* Product: '<S41>/Multiply' incorporates:
    *  DiscreteIntegrator: '<S21>/Discrete-Time Integrator'
    */
-  rtb_Add_jo[0] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[1] * rtb_Gain_g2;
+  rtb_Add_n[0] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[1] * rtb_Gain_g2;
 
   /* Product: '<S42>/Multiply4' incorporates:
    *  DiscreteIntegrator: '<S21>/Discrete-Time Integrator'
@@ -1071,11 +1048,17 @@ void Plant_step(void)
     Plant_DW.DiscreteTimeIntegrator1_DSTATE[2] = Plant_U.States_Init.pos[2];
   }
 
+  rtb_DiscreteTimeIntegrator1_i_1 = Plant_DW.DiscreteTimeIntegrator1_DSTATE[0];
+  rtb_DiscreteTimeIntegrator1_i_0 = Plant_DW.DiscreteTimeIntegrator1_DSTATE[1];
+  rtb_DiscreteTimeIntegrator1_idx = Plant_DW.DiscreteTimeIntegrator1_DSTATE[2];
+
+  /* End of DiscreteIntegrator: '<S22>/Discrete-Time Integrator1' */
+
   /* Product: '<S44>/Product7' incorporates:
    *  Product: '<S43>/Divide'
    *  Product: '<S45>/Product9'
    */
-  rtb_Gain_d_tmp_1 = rtb_Divide_o_idx_3 * rtb_Divide_o_idx_3;
+  rtb_Gain_d_tmp_2 = rtb_Divide_o_idx_3 * rtb_Divide_o_idx_3;
 
   /* Product: '<S44>/Product' incorporates:
    *  Product: '<S43>/Divide'
@@ -1105,7 +1088,7 @@ void Plant_step(void)
    *  Sum: '<S44>/Sum2'
    *  Sum: '<S44>/Sum3'
    */
-  rtb_Gain_g2 = (((0.5F - rtb_Sum_n3_idx_2) - rtb_Gain_d_tmp_1) * 2.0F *
+  rtb_Gain_g2 = (((0.5F - rtb_Sum_n3_idx_2) - rtb_Gain_d_tmp_2) * 2.0F *
                  Plant_DW.DiscreteTimeIntegrator_DSTATE_a[0] +
                  (rtb_Divide_o_idx_1 + rtb_Divide_o_idx_0) * 2.0F *
                  Plant_DW.DiscreteTimeIntegrator_DSTATE_a[1]) + (rtb_Gain_d_tmp
@@ -1114,7 +1097,7 @@ void Plant_step(void)
   /* Product: '<S41>/Multiply1' incorporates:
    *  DiscreteIntegrator: '<S21>/Discrete-Time Integrator'
    */
-  rtb_Add_jo[1] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[2] * rtb_Gain_g2;
+  rtb_Add_n[1] = Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[2] * rtb_Gain_g2;
 
   /* Product: '<S42>/Multiply5' incorporates:
    *  DiscreteIntegrator: '<S21>/Discrete-Time Integrator'
@@ -1133,19 +1116,21 @@ void Plant_step(void)
    *  Sum: '<S45>/Sum2'
    *  Sum: '<S45>/Sum3'
    */
-  rtb_Gain_g2 = ((rtb_DiscreteTimeIntegrator1_idx - rtb_Gain_d_tmp_1) * 2.0F *
+  rtb_Gain_g2 = ((rtb_Gain_d_tmp_1 - rtb_Gain_d_tmp_2) * 2.0F *
                  Plant_DW.DiscreteTimeIntegrator_DSTATE_a[1] +
                  (rtb_Divide_o_idx_1 - rtb_Divide_o_idx_0) * 2.0F *
-                 Plant_DW.DiscreteTimeIntegrator_DSTATE_a[0]) + (rtb_Sum_jo +
-    rtb_Sum_n3_idx_0) * 2.0F * Plant_DW.DiscreteTimeIntegrator_DSTATE_a[2];
+                 Plant_DW.DiscreteTimeIntegrator_DSTATE_a[0]) +
+    (rtb_Gain_d_tmp_3 + rtb_Gain_d_tmp_4) * 2.0F *
+    Plant_DW.DiscreteTimeIntegrator_DSTATE_a[2];
 
-  /* DiscreteIntegrator: '<S22>/Discrete-Time Integrator1' */
-  rtb_DiscreteTimeIntegrator1_idx = Plant_DW.DiscreteTimeIntegrator1_DSTATE[0];
-
+  /* Outputs for Atomic SubSystem: '<Root>/Environment' */
   /* Sum: '<S21>/Sum' incorporates:
    *  Sum: '<S23>/Sum'
+   *  Sum: '<S3>/Sum'
    */
   rtb_Sum_nh[0] = 0.0F - (rtb_Sum_b[0] - rtb_Sum_nh[0]);
+
+  /* End of Outputs for SubSystem: '<Root>/Environment' */
 
   /* Sum: '<S22>/Sum' incorporates:
    *  DiscreteIntegrator: '<S21>/Discrete-Time Integrator'
@@ -1153,26 +1138,17 @@ void Plant_step(void)
    *  Product: '<S42>/Multiply3'
    *  Sum: '<S37>/Sum'
    */
-  rtb_Sum_n3_idx_0 = rtb_force_B_N_idx_0 - (rtb_Add_jo[0] -
-    Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[2] * rtb_Gain_g2);
+  rtb_force_B_N_idx_0 -= rtb_Add_n[0] -
+    Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[2] * rtb_Gain_g2;
 
-  /* DiscreteIntegrator: '<S22>/Discrete-Time Integrator1' */
-  rtb_force_B_N_idx_0 = Plant_DW.DiscreteTimeIntegrator1_DSTATE[1];
-
+  /* Outputs for Atomic SubSystem: '<Root>/Environment' */
   /* Sum: '<S21>/Sum' incorporates:
    *  Sum: '<S23>/Sum'
+   *  Sum: '<S3>/Sum'
    */
   rtb_Sum_nh[1] = 0.0F - (rtb_Sum_b[1] - rtb_Sum_nh[1]);
 
-  /* Sum: '<S22>/Sum' incorporates:
-   *  Product: '<S22>/Divide'
-   *  Sum: '<S37>/Sum'
-   */
-  rtb_TrigonometricFunction1_idx_ = rtb_force_B_N_idx_1 - (rtb_Add_jo[1] -
-    rtb_TrigonometricFunction1_idx_);
-
-  /* DiscreteIntegrator: '<S22>/Discrete-Time Integrator1' */
-  rtb_force_B_N_idx_1 = Plant_DW.DiscreteTimeIntegrator1_DSTATE[2];
+  /* End of Outputs for SubSystem: '<Root>/Environment' */
 
   /* Sum: '<S22>/Sum' incorporates:
    *  DiscreteIntegrator: '<S21>/Discrete-Time Integrator'
@@ -1180,13 +1156,29 @@ void Plant_step(void)
    *  Product: '<S41>/Multiply2'
    *  Sum: '<S37>/Sum'
    */
+  rtb_TrigonometricFunction1_idx_ = rtb_force_B_N_idx_1 - (rtb_Add_n[1] -
+    rtb_TrigonometricFunction1_idx_);
   rtb_Gain_g2 = 0.0F - (Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[0] *
                         rtb_Gain_g2 - rtb_Sum_n3_idx_2);
 
+  /* Outputs for Atomic SubSystem: '<Root>/Environment' */
+  /* Outputs for Atomic SubSystem: '<Root>/Actuators' */
   /* Sum: '<S21>/Sum' incorporates:
+   *  Abs: '<S20>/Abs2'
+   *  Constant: '<S20>/Constant4'
+   *  Delay: '<Root>/Delay'
+   *  Gain: '<S1>/d'
+   *  Product: '<S20>/Multiply6'
+   *  Sum: '<S20>/Sum2'
    *  Sum: '<S23>/Sum'
+   *  Sum: '<S3>/Sum'
    */
-  rtb_Sum_nh[2] = rtb_torque_B_Nm_idx_2 - (rtb_Sum_b[2] - rtb_Sum_nh[2]);
+  rtb_Sum_nh[2] = ((-4.0F - fabsf(Plant_Y.Plant_States.rot_z_B)) *
+                   Plant_Y.Plant_States.rot_z_B + 0.8F * rtb_Deg2Rad) -
+    (rtb_Sum_b[2] - rtb_Sum_nh[2]);
+
+  /* End of Outputs for SubSystem: '<Root>/Actuators' */
+  /* End of Outputs for SubSystem: '<Root>/Environment' */
 
   /* Sum: '<S49>/Sum' incorporates:
    *  Constant: '<S49>/Constant'
@@ -1207,14 +1199,16 @@ void Plant_step(void)
    *  Sum: '<S49>/Sum2'
    *  Sum: '<S49>/Sum3'
    */
-  rtb_torque_B_Nm_idx_2 = (((0.5F - rtb_TrigonometricFunction1_id_1 *
-    rtb_TrigonometricFunction1_id_1) - rtb_TrigonometricFunction1_id_0 *
-    rtb_TrigonometricFunction1_id_0) * 2.0F * rtb_Sum_n3_idx_0 + (rtb_Square2 *
-    rtb_TrigonometricFunction1_id_1 - rtb_TrigonometricFunction1_id_2 *
-    rtb_TrigonometricFunction1_id_0) * 2.0F * rtb_TrigonometricFunction1_idx_) +
-    (rtb_Square2 * rtb_TrigonometricFunction1_id_0 +
-     rtb_TrigonometricFunction1_id_2 * rtb_TrigonometricFunction1_id_1) * 2.0F *
-    rtb_Gain_g2;
+  rtb_Deg2Rad = (((0.5F - rtb_TrigonometricFunction1_id_1 *
+                   rtb_TrigonometricFunction1_id_1) -
+                  rtb_TrigonometricFunction1_id_0 *
+                  rtb_TrigonometricFunction1_id_0) * 2.0F * rtb_force_B_N_idx_0
+                 + (rtb_Square2 * rtb_TrigonometricFunction1_id_1 -
+                    rtb_TrigonometricFunction1_id_2 *
+                    rtb_TrigonometricFunction1_id_0) * 2.0F *
+                 rtb_TrigonometricFunction1_idx_) + (rtb_Square2 *
+    rtb_TrigonometricFunction1_id_0 + rtb_TrigonometricFunction1_id_2 *
+    rtb_TrigonometricFunction1_id_1) * 2.0F * rtb_Gain_g2;
 
   /* Sum: '<S50>/Sum' incorporates:
    *  Constant: '<S50>/Constant'
@@ -1235,12 +1229,11 @@ void Plant_step(void)
    *  Sum: '<S50>/Sum2'
    *  Sum: '<S50>/Sum3'
    */
-  rtb_Sum_jo = (((0.5F - rtb_Square2 * rtb_Square2) -
-                 rtb_TrigonometricFunction1_id_0 *
-                 rtb_TrigonometricFunction1_id_0) * 2.0F *
-                rtb_TrigonometricFunction1_idx_ + (rtb_Square2 *
+  rtb_force_B_N_idx_1 = (((0.5F - rtb_Square2 * rtb_Square2) -
+    rtb_TrigonometricFunction1_id_0 * rtb_TrigonometricFunction1_id_0) * 2.0F *
+    rtb_TrigonometricFunction1_idx_ + (rtb_Square2 *
     rtb_TrigonometricFunction1_id_1 + rtb_TrigonometricFunction1_id_2 *
-    rtb_TrigonometricFunction1_id_0) * 2.0F * rtb_Sum_n3_idx_0) +
+    rtb_TrigonometricFunction1_id_0) * 2.0F * rtb_force_B_N_idx_0) +
     (rtb_TrigonometricFunction1_id_1 * rtb_TrigonometricFunction1_id_0 -
      rtb_TrigonometricFunction1_id_2 * rtb_Square2) * 2.0F * rtb_Gain_g2;
 
@@ -1263,14 +1256,13 @@ void Plant_step(void)
    *  Sum: '<S51>/Sum2'
    *  Sum: '<S51>/Sum3'
    */
-  rtb_Sum_n3_idx_0 = ((rtb_Square2 * rtb_TrigonometricFunction1_id_0 -
-                       rtb_TrigonometricFunction1_id_2 *
-                       rtb_TrigonometricFunction1_id_1) * 2.0F *
-                      rtb_Sum_n3_idx_0 + (rtb_TrigonometricFunction1_id_2 *
-    rtb_Square2 + rtb_TrigonometricFunction1_id_1 *
-    rtb_TrigonometricFunction1_id_0) * 2.0F * rtb_TrigonometricFunction1_idx_) +
-    ((0.5F - rtb_Square2 * rtb_Square2) - rtb_TrigonometricFunction1_id_1 *
-     rtb_TrigonometricFunction1_id_1) * 2.0F * rtb_Gain_g2;
+  rtb_force_B_N_idx_0 = ((rtb_Square2 * rtb_TrigonometricFunction1_id_0 -
+    rtb_TrigonometricFunction1_id_2 * rtb_TrigonometricFunction1_id_1) * 2.0F *
+    rtb_force_B_N_idx_0 + (rtb_TrigonometricFunction1_id_2 * rtb_Square2 +
+    rtb_TrigonometricFunction1_id_1 * rtb_TrigonometricFunction1_id_0) * 2.0F *
+    rtb_TrigonometricFunction1_idx_) + ((0.5F - rtb_Square2 * rtb_Square2) -
+    rtb_TrigonometricFunction1_id_1 * rtb_TrigonometricFunction1_id_1) * 2.0F *
+    rtb_Gain_g2;
 
   /* Math: '<S26>/Square1' incorporates:
    *  Product: '<S32>/Divide'
@@ -1286,7 +1278,7 @@ void Plant_step(void)
    *  Sum: '<S26>/Subtract'
    */
   rtb_Gain_d_tmp_1 = (rtb_Product2_e * rtb_TrigonometricFunction1_id_3 -
-                      rtb_TrigonometricFunction1_id_4 * rtb_Add_c) * 2.0F;
+                      rtb_TrigonometricFunction1_id_4 * rtb_Add_ju) * 2.0F;
 
   /* Update for UnitDelay: '<S24>/Delay Input1' incorporates:
    *  Inport: '<Root>/States_Init'
@@ -1361,7 +1353,7 @@ void Plant_step(void)
   Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[0] += 0.002F * rtb_act_force[0];
 
   /* Update for DiscreteIntegrator: '<S22>/Discrete-Time Integrator' */
-  Plant_DW.DiscreteTimeIntegrator_DSTATE_a[0] += 0.002F * rtb_torque_B_Nm_idx_2;
+  Plant_DW.DiscreteTimeIntegrator_DSTATE_a[0] += 0.002F * rtb_Deg2Rad;
 
   /* Update for DiscreteIntegrator: '<S22>/Discrete-Time Integrator1' */
   Plant_DW.DiscreteTimeIntegrator1_DSTATE[0] += 0.002F * rtb_vel_O_mPs_idx_0;
@@ -1370,7 +1362,7 @@ void Plant_step(void)
   Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[1] += 0.002F * rtb_act_force[1];
 
   /* Update for DiscreteIntegrator: '<S22>/Discrete-Time Integrator' */
-  Plant_DW.DiscreteTimeIntegrator_DSTATE_a[1] += 0.002F * rtb_Sum_jo;
+  Plant_DW.DiscreteTimeIntegrator_DSTATE_a[1] += 0.002F * rtb_force_B_N_idx_1;
 
   /* Update for DiscreteIntegrator: '<S22>/Discrete-Time Integrator1' */
   Plant_DW.DiscreteTimeIntegrator1_DSTATE[1] += 0.002F * rtb_vel_O_mPs_idx_1;
@@ -1379,7 +1371,7 @@ void Plant_step(void)
   Plant_DW.DiscreteTimeIntegrator_DSTAT_p2[2] += 0.002F * rtb_act_force[2];
 
   /* Update for DiscreteIntegrator: '<S22>/Discrete-Time Integrator' */
-  Plant_DW.DiscreteTimeIntegrator_DSTATE_a[2] += 0.002F * rtb_Sum_n3_idx_0;
+  Plant_DW.DiscreteTimeIntegrator_DSTATE_a[2] += 0.002F * rtb_force_B_N_idx_0;
 
   /* Update for DiscreteIntegrator: '<S22>/Discrete-Time Integrator1' */
   Plant_DW.DiscreteTimeIntegrator1_DSTATE[2] += 0.002F * rtb_vel_O_mPs_idx_2;
@@ -1671,9 +1663,9 @@ void Plant_step(void)
    *  Sum: '<S26>/Subtract2'
    *  Trigonometry: '<S26>/Atan2'
    */
-  Plant_Y.Plant_States.phi = atan2f((rtb_Product2_e * rtb_Add_c +
+  Plant_Y.Plant_States.phi = atan2f((rtb_Product2_e * rtb_Add_ju +
     rtb_TrigonometricFunction1_id_3 * rtb_TrigonometricFunction1_id_4) * 2.0F,
-    1.0F - 2.0F * (rtb_Add_c * rtb_Add_c + rtb_Square2));
+    1.0F - 2.0F * (rtb_Add_ju * rtb_Add_ju + rtb_Square2));
 
   /* End of Outputs for SubSystem: '<Root>/Bus_Constructor' */
 
@@ -1708,7 +1700,7 @@ void Plant_step(void)
    */
   Plant_Y.Plant_States.theta = asinf(rtb_Gain_d_tmp_1);
   Plant_Y.Plant_States.psi = atan2f((rtb_Product2_e *
-    rtb_TrigonometricFunction1_id_4 + rtb_Add_c *
+    rtb_TrigonometricFunction1_id_4 + rtb_Add_ju *
     rtb_TrigonometricFunction1_id_3) * 2.0F, 1.0F - 2.0F *
     (rtb_TrigonometricFunction1_id_4 * rtb_TrigonometricFunction1_id_4 +
      rtb_Square2));
@@ -1717,9 +1709,9 @@ void Plant_step(void)
   Plant_Y.Plant_States.rot_x_B = rtb_omega_B_radPs_idx_0;
   Plant_Y.Plant_States.rot_y_B = rtb_omega_B_radPs_idx_1;
   Plant_Y.Plant_States.rot_z_B = rtb_omega_B_radPs_idx_2;
-  Plant_Y.Plant_States.acc_x_O = rtb_torque_B_Nm_idx_2;
-  Plant_Y.Plant_States.acc_y_O = rtb_Sum_jo;
-  Plant_Y.Plant_States.acc_z_O = rtb_Sum_n3_idx_0;
+  Plant_Y.Plant_States.acc_x_O = rtb_Deg2Rad;
+  Plant_Y.Plant_States.acc_y_O = rtb_force_B_N_idx_1;
+  Plant_Y.Plant_States.acc_z_O = rtb_force_B_N_idx_0;
   Plant_Y.Plant_States.vel_x_O = rtb_vel_O_mPs_idx_0;
   Plant_Y.Plant_States.vel_y_O = rtb_vel_O_mPs_idx_1;
   Plant_Y.Plant_States.vel_z_O = rtb_vel_O_mPs_idx_2;
@@ -1745,7 +1737,7 @@ void Plant_step(void)
    *  Sum: '<S10>/Subtract'
    */
   rtb_SumofElements1 = 1.0 / (rtb_Divide2_idx_1 * rtb_Divide2_idx_0) *
-    (rtb_DiscreteTimeIntegrator1_idx - Plant_DW.Delay_DSTATE_a[0]) +
+    (rtb_DiscreteTimeIntegrator1_i_1 - Plant_DW.Delay_DSTATE_a[0]) +
     Plant_DW.Delay1_DSTATE_n[0];
 
   /* Abs: '<S17>/Abs' */
@@ -1769,10 +1761,10 @@ void Plant_step(void)
    *  Sum: '<S10>/Subtract'
    */
   rtb_Add_idx_1 = 1.0 / (rtb_Divide2_idx_1 * rtb_Add_idx_1) *
-    (rtb_force_B_N_idx_0 - Plant_DW.Delay_DSTATE_a[1]) +
+    (rtb_DiscreteTimeIntegrator1_i_0 - Plant_DW.Delay_DSTATE_a[1]) +
     Plant_DW.Delay1_DSTATE_n[1];
-  rtb_Divide2_idx_0 = -(rtb_force_B_N_idx_1 - Plant_DW.Delay_DSTATE_a[2]) +
-    Plant_DW.Delay1_DSTATE_n[2];
+  rtb_Divide2_idx_0 = -(rtb_DiscreteTimeIntegrator1_idx -
+                        Plant_DW.Delay_DSTATE_a[2]) + Plant_DW.Delay1_DSTATE_n[2];
 
   /* BusAssignment: '<S2>/Bus Assignment1' incorporates:
    *  Constant: '<S2>/Constant1'
@@ -1782,9 +1774,9 @@ void Plant_step(void)
    *  Delay: '<S8>/Delay'
    *  Gain: '<S2>/Gain'
    */
-  Plant_Y.Plant_States.x_R = rtb_DiscreteTimeIntegrator1_idx;
-  Plant_Y.Plant_States.y_R = rtb_force_B_N_idx_0;
-  Plant_Y.Plant_States.h_R = -rtb_force_B_N_idx_1;
+  Plant_Y.Plant_States.x_R = rtb_DiscreteTimeIntegrator1_i_1;
+  Plant_Y.Plant_States.y_R = rtb_DiscreteTimeIntegrator1_i_0;
+  Plant_Y.Plant_States.h_R = -rtb_DiscreteTimeIntegrator1_idx;
   Plant_Y.Plant_States.lat = rtb_SumofElements1;
   Plant_Y.Plant_States.lon = rtb_Add_idx_1;
   Plant_Y.Plant_States.alt = rtb_Divide2_idx_0;
@@ -1805,7 +1797,7 @@ void Plant_step(void)
   /* Update for Delay: '<S10>/Delay' incorporates:
    *  DataTypeConversion: '<S10>/Data Type Conversion'
    */
-  Plant_DW.Delay_DSTATE_a[0] = rtb_DiscreteTimeIntegrator1_idx;
+  Plant_DW.Delay_DSTATE_a[0] = rtb_DiscreteTimeIntegrator1_i_1;
 
   /* Update for Delay: '<S10>/Delay1' */
   Plant_DW.Delay1_DSTATE_n[0] = rtb_SumofElements1;
@@ -1813,7 +1805,7 @@ void Plant_step(void)
   /* Update for Delay: '<S10>/Delay' incorporates:
    *  DataTypeConversion: '<S10>/Data Type Conversion'
    */
-  Plant_DW.Delay_DSTATE_a[1] = rtb_force_B_N_idx_0;
+  Plant_DW.Delay_DSTATE_a[1] = rtb_DiscreteTimeIntegrator1_i_0;
 
   /* Update for Delay: '<S10>/Delay1' */
   Plant_DW.Delay1_DSTATE_n[1] = rtb_Add_idx_1;
@@ -1821,7 +1813,7 @@ void Plant_step(void)
   /* Update for Delay: '<S10>/Delay' incorporates:
    *  DataTypeConversion: '<S10>/Data Type Conversion'
    */
-  Plant_DW.Delay_DSTATE_a[2] = rtb_force_B_N_idx_1;
+  Plant_DW.Delay_DSTATE_a[2] = rtb_DiscreteTimeIntegrator1_idx;
 
   /* Update for Delay: '<S10>/Delay1' */
   Plant_DW.Delay1_DSTATE_n[2] = rtb_Divide2_idx_0;
@@ -1835,11 +1827,11 @@ void Plant_step(void)
    *  Delay: '<Root>/Delay'
    */
   if ((real32_T)Plant_Y.Plant_States.alt > 11000.0F) {
-    rtb_Add_c = 11000.0F;
+    rtb_Add_ju = 11000.0F;
   } else if ((real32_T)Plant_Y.Plant_States.alt < 0.0F) {
-    rtb_Add_c = 0.0F;
+    rtb_Add_ju = 0.0F;
   } else {
-    rtb_Add_c = (real32_T)Plant_Y.Plant_States.alt;
+    rtb_Add_ju = (real32_T)Plant_Y.Plant_States.alt;
   }
 
   /* End of Saturate: '<S62>/Limit  altitude  to troposhere' */
@@ -1848,7 +1840,7 @@ void Plant_step(void)
    *  Constant: '<S62>/Sea Level  Temperature'
    *  Gain: '<S62>/Lapse Rate'
    */
-  rtb_Magnitude_Lookup_Table = 288.15F - 0.0065F * rtb_Add_c;
+  rtb_Magnitude_Lookup_Table = 288.15F - 0.0065F * rtb_Add_ju;
 
   /* Sum: '<S62>/Sum' incorporates:
    *  Constant: '<S62>/Altitude of Troposphere'
@@ -1966,14 +1958,14 @@ void Plant_step(void)
   /* Sum: '<S71>/Sum1' incorporates:
    *  Delay: '<S70>/Delay1'
    */
-  rtb_Add_jo[0] = rtb_RandomSource1[0] + Plant_DW.Delay1_DSTATE_a[0];
-  rtb_Add_jo[1] = rtb_RandomSource1[1] + Plant_DW.Delay1_DSTATE_a[1];
-  rtb_Add_jo[2] = rtb_RandomSource1[2] + Plant_DW.Delay1_DSTATE_a[2];
+  rtb_Add_n[0] = rtb_RandomSource1[0] + Plant_DW.Delay1_DSTATE_a[0];
+  rtb_Add_n[1] = rtb_RandomSource1[1] + Plant_DW.Delay1_DSTATE_a[1];
+  rtb_Add_n[2] = rtb_RandomSource1[2] + Plant_DW.Delay1_DSTATE_a[2];
 
   /* DiscreteFir: '<S76>/Discrete FIR Filter' */
-  rtb_Sum_nh[0] = rtb_Add_jo[0] * 0.5F + Plant_DW.DiscreteFIRFilter_states_f[0] *
+  rtb_Sum_nh[0] = rtb_Add_n[0] * 0.5F + Plant_DW.DiscreteFIRFilter_states_f[0] *
     0.5F;
-  rtb_Sum_nh[1] = rtb_Add_jo[1] * 0.5F + Plant_DW.DiscreteFIRFilter_states_f[1] *
+  rtb_Sum_nh[1] = rtb_Add_n[1] * 0.5F + Plant_DW.DiscreteFIRFilter_states_f[1] *
     0.5F;
 
   /* Gain: '<S65>/Gain6' incorporates:
@@ -2084,27 +2076,27 @@ void Plant_step(void)
     (uint32_T)-rtb_Divide2_idx_1 : (uint32_T)rtb_Divide2_idx_1;
 
   /* Gain: '<S65>/Gain7' */
-  rtb_Add_c = fmodf(floorf(1000.0F * rtb_Sum_nh[0]), 4.2949673E+9F);
+  rtb_Add_ju = fmodf(floorf(1000.0F * rtb_Sum_nh[0]), 4.2949673E+9F);
 
   /* BusAssignment: '<S65>/Bus Assignment' incorporates:
    *  Gain: '<S65>/Gain7'
    */
-  rtb_BusAssignment_dk.velN = rtb_Add_c < 0.0F ? -(int32_T)(uint32_T)-rtb_Add_c :
-    (int32_T)(uint32_T)rtb_Add_c;
+  rtb_BusAssignment_dk.velN = rtb_Add_ju < 0.0F ? -(int32_T)(uint32_T)
+    -rtb_Add_ju : (int32_T)(uint32_T)rtb_Add_ju;
 
   /* Gain: '<S65>/Gain8' */
-  rtb_Add_c = fmodf(floorf(1000.0F * rtb_Sum_nh[1]), 4.2949673E+9F);
+  rtb_Add_ju = fmodf(floorf(1000.0F * rtb_Sum_nh[1]), 4.2949673E+9F);
 
   /* BusAssignment: '<S65>/Bus Assignment' incorporates:
    *  Gain: '<S65>/Gain8'
    */
-  rtb_BusAssignment_dk.velE = rtb_Add_c < 0.0F ? -(int32_T)(uint32_T)-rtb_Add_c :
-    (int32_T)(uint32_T)rtb_Add_c;
+  rtb_BusAssignment_dk.velE = rtb_Add_ju < 0.0F ? -(int32_T)(uint32_T)
+    -rtb_Add_ju : (int32_T)(uint32_T)rtb_Add_ju;
 
   /* Gain: '<S65>/Gain9' incorporates:
    *  DiscreteFir: '<S76>/Discrete FIR Filter'
    */
-  rtb_Add_c = fmodf(floorf((rtb_Add_jo[2] * 0.5F +
+  rtb_Add_ju = fmodf(floorf((rtb_Add_n[2] * 0.5F +
     Plant_DW.DiscreteFIRFilter_states_f[2] * 0.5F) * 1000.0F), 4.2949673E+9F);
 
   /* BusAssignment: '<S65>/Bus Assignment' incorporates:
@@ -2117,8 +2109,8 @@ void Plant_step(void)
    *  Sqrt: '<S67>/Sqrt'
    *  Sum: '<S67>/Add'
    */
-  rtb_BusAssignment_dk.velD = rtb_Add_c < 0.0F ? -(int32_T)(uint32_T)-rtb_Add_c :
-    (int32_T)(uint32_T)rtb_Add_c;
+  rtb_BusAssignment_dk.velD = rtb_Add_ju < 0.0F ? -(int32_T)(uint32_T)
+    -rtb_Add_ju : (int32_T)(uint32_T)rtb_Add_ju;
   rtb_BusAssignment_dk.gSpeed = (int32_T)(uint32_T)fmodf(floorf(sqrtf(fmaxf
     (rtb_Sum_nh[0] * rtb_Sum_nh[0] + rtb_Sum_nh[1] * rtb_Sum_nh[1], 0.0F)) *
     1000.0F), 4.2949673E+9F);
@@ -2210,7 +2202,7 @@ void Plant_step(void)
   Plant_DW.Delay1_DSTATE_a[147] = Plant_Y.Plant_States.vel_x_O;
 
   /* Update for DiscreteFir: '<S76>/Discrete FIR Filter' */
-  Plant_DW.DiscreteFIRFilter_states_f[0] = rtb_Add_jo[0];
+  Plant_DW.DiscreteFIRFilter_states_f[0] = rtb_Add_n[0];
 
   /* Update for Delay: '<S70>/Delay1' incorporates:
    *  Delay: '<Root>/Delay'
@@ -2219,7 +2211,7 @@ void Plant_step(void)
   Plant_DW.Delay1_DSTATE_a[148] = Plant_Y.Plant_States.vel_y_O;
 
   /* Update for DiscreteFir: '<S76>/Discrete FIR Filter' */
-  Plant_DW.DiscreteFIRFilter_states_f[1] = rtb_Add_jo[1];
+  Plant_DW.DiscreteFIRFilter_states_f[1] = rtb_Add_n[1];
 
   /* Update for Delay: '<S70>/Delay1' incorporates:
    *  Delay: '<Root>/Delay'
@@ -2228,7 +2220,7 @@ void Plant_step(void)
   Plant_DW.Delay1_DSTATE_a[149] = Plant_Y.Plant_States.vel_z_O;
 
   /* Update for DiscreteFir: '<S76>/Discrete FIR Filter' */
-  Plant_DW.DiscreteFIRFilter_states_f[2] = rtb_Add_jo[2];
+  Plant_DW.DiscreteFIRFilter_states_f[2] = rtb_Add_n[2];
   for (i = 0; i < 249; i++) {
     /* Update for Delay: '<S71>/Delay1' */
     Plant_DW.Delay1_DSTATE[i] = Plant_DW.Delay1_DSTATE[i + 1];
@@ -2443,7 +2435,7 @@ void Plant_step(void)
     Plant_Y.Plant_States.rot_x_B);
   rtb_Sum_nh[1] = (real32_T)(rtb_Product1 / 4.0 * 0.5 +
     Plant_Y.Plant_States.rot_y_B);
-  rtb_Add_c = (real32_T)((rtb_SumofElements + rtb_Product1) * 0.5 / 4.0 * 0.5 +
+  rtb_Add_ju = (real32_T)((rtb_SumofElements + rtb_Product1) * 0.5 / 4.0 * 0.5 +
     Plant_Y.Plant_States.rot_z_B);
 
   /* End of Outputs for SubSystem: '<S93>/Vibration_Model' */
@@ -2454,7 +2446,7 @@ void Plant_step(void)
   for (i = 0; i < 3; i++) {
     rtb_RandomSource[i] = (Plant_ConstB.Add_g[i + 3] * rtb_Sum_nh[1] +
       Plant_ConstB.Add_g[i] * rtb_Sum_nh[0]) + Plant_ConstB.Add_g[i + 6] *
-      rtb_Add_c;
+      rtb_Add_ju;
   }
 
   /* End of Sum: '<S101>/Sum' */
@@ -2480,43 +2472,43 @@ void Plant_step(void)
    *  DiscreteIntegrator: '<S100>/Discrete-Time Integrator5'
    */
   if (Plant_DW.DiscreteTimeIntegrator5_DSTATE[0] > 34.9065857F) {
-    rtb_Add_c = 34.9065857F;
+    rtb_Add_ju = 34.9065857F;
   } else if (Plant_DW.DiscreteTimeIntegrator5_DSTATE[0] < -34.9065857F) {
-    rtb_Add_c = -34.9065857F;
+    rtb_Add_ju = -34.9065857F;
   } else {
-    rtb_Add_c = Plant_DW.DiscreteTimeIntegrator5_DSTATE[0];
+    rtb_Add_ju = Plant_DW.DiscreteTimeIntegrator5_DSTATE[0];
   }
 
   /* Sum: '<S94>/Sum' */
-  rtb_Add_jo[0] = rtb_Add_c + rtb_Sum_b[0];
+  rtb_Add_n[0] = rtb_Add_ju + rtb_Sum_b[0];
 
   /* Saturate: '<S94>/Saturation' incorporates:
    *  DiscreteIntegrator: '<S100>/Discrete-Time Integrator5'
    */
   if (Plant_DW.DiscreteTimeIntegrator5_DSTATE[1] > 34.9065857F) {
-    rtb_Add_c = 34.9065857F;
+    rtb_Add_ju = 34.9065857F;
   } else if (Plant_DW.DiscreteTimeIntegrator5_DSTATE[1] < -34.9065857F) {
-    rtb_Add_c = -34.9065857F;
+    rtb_Add_ju = -34.9065857F;
   } else {
-    rtb_Add_c = Plant_DW.DiscreteTimeIntegrator5_DSTATE[1];
+    rtb_Add_ju = Plant_DW.DiscreteTimeIntegrator5_DSTATE[1];
   }
 
   /* Sum: '<S94>/Sum' */
-  rtb_Add_jo[1] = rtb_Add_c + rtb_Sum_b[1];
+  rtb_Add_n[1] = rtb_Add_ju + rtb_Sum_b[1];
 
   /* Saturate: '<S94>/Saturation' incorporates:
    *  DiscreteIntegrator: '<S100>/Discrete-Time Integrator5'
    */
   if (Plant_DW.DiscreteTimeIntegrator5_DSTATE[2] > 34.9065857F) {
-    rtb_Add_c = 34.9065857F;
+    rtb_Add_ju = 34.9065857F;
   } else if (Plant_DW.DiscreteTimeIntegrator5_DSTATE[2] < -34.9065857F) {
-    rtb_Add_c = -34.9065857F;
+    rtb_Add_ju = -34.9065857F;
   } else {
-    rtb_Add_c = Plant_DW.DiscreteTimeIntegrator5_DSTATE[2];
+    rtb_Add_ju = Plant_DW.DiscreteTimeIntegrator5_DSTATE[2];
   }
 
   /* Sum: '<S94>/Sum' */
-  rtb_Add_jo[2] = rtb_Add_c + rtb_Sum_b[2];
+  rtb_Add_n[2] = rtb_Add_ju + rtb_Sum_b[2];
 
   /* Outputs for Atomic SubSystem: '<S82>/Vibration_Model' */
   /* Math: '<S88>/u^2' incorporates:
@@ -2650,9 +2642,9 @@ void Plant_step(void)
    *  Memory: '<S53>/Memory1'
    */
   Plant_Y.IMU.timestamp = Plant_DW.Memory1_PreviousInput;
-  Plant_Y.IMU.gyr_x = rtb_Add_jo[0];
-  Plant_Y.IMU.gyr_y = rtb_Add_jo[1];
-  Plant_Y.IMU.gyr_z = rtb_Add_jo[2];
+  Plant_Y.IMU.gyr_x = rtb_Add_n[0];
+  Plant_Y.IMU.gyr_y = rtb_Add_n[1];
+  Plant_Y.IMU.gyr_z = rtb_Add_n[2];
 
   /* Update for DiscreteIntegrator: '<S100>/Discrete-Time Integrator5' */
   Plant_DW.DiscreteTimeIntegrator5_IC_LOAD = 0U;
@@ -2771,8 +2763,8 @@ void Plant_step(void)
   /* Trigonometry: '<S110>/Trigonometric Function3' incorporates:
    *  Trigonometry: '<S110>/Trigonometric Function1'
    */
-  rtb_Add_c = arm_cos_f32(rtb_Magnitude_Lookup_Table);
-  rtb_VectorConcatenate_k[0] = rtb_Add_c;
+  rtb_Add_ju = arm_cos_f32(rtb_Magnitude_Lookup_Table);
+  rtb_VectorConcatenate_k[0] = rtb_Add_ju;
 
   /* SignalConversion: '<S110>/ConcatBufferAtVector Concatenate2In2' incorporates:
    *  Constant: '<S110>/Constant4'
@@ -2870,11 +2862,11 @@ void Plant_step(void)
    *  DiscreteIntegrator: '<S89>/Discrete-Time Integrator5'
    */
   if (Plant_DW.DiscreteTimeIntegrator5_DSTAT_c[2] > 78.4532F) {
-    rtb_torque_B_Nm_idx_2 = 78.4532F;
+    rtb_Deg2Rad = 78.4532F;
   } else if (Plant_DW.DiscreteTimeIntegrator5_DSTAT_c[2] < -78.4532F) {
-    rtb_torque_B_Nm_idx_2 = -78.4532F;
+    rtb_Deg2Rad = -78.4532F;
   } else {
-    rtb_torque_B_Nm_idx_2 = Plant_DW.DiscreteTimeIntegrator5_DSTAT_c[2];
+    rtb_Deg2Rad = Plant_DW.DiscreteTimeIntegrator5_DSTAT_c[2];
   }
 
   /* Update for DiscreteIntegrator: '<S100>/Discrete-Time Integrator5' incorporates:
@@ -2909,7 +2901,7 @@ void Plant_step(void)
   rtb_VectorConcatenate_k[7] = 0.0F;
 
   /* Trigonometry: '<S110>/Trigonometric Function1' */
-  rtb_VectorConcatenate_k[8] = rtb_Add_c;
+  rtb_VectorConcatenate_k[8] = rtb_Add_ju;
 
   /* Gain: '<S109>/toGauss' incorporates:
    *  LookupNDDirect: '<S108>/Magnitude_Lookup_Table'
@@ -2917,20 +2909,20 @@ void Plant_step(void)
    * About '<S108>/Magnitude_Lookup_Table':
    *  2-dimensional Direct Look-Up returning a Scalar,
    */
-  rtb_Add_c = Plant_ConstP.Magnitude_Lookup_Table_table[i] * 0.01F;
+  rtb_Add_ju = Plant_ConstP.Magnitude_Lookup_Table_table[i] * 0.01F;
 
   /* Product: '<S109>/Multiply1' incorporates:
    *  Product: '<S109>/Multiply'
    */
   for (i = 0; i < 3; i++) {
-    rtb_Sum_nh[i] = rtb_VectorConcatenate_k[i] * rtb_Add_c;
+    rtb_Sum_nh[i] = rtb_VectorConcatenate_k[i] * rtb_Add_ju;
   }
 
   /* End of Product: '<S109>/Multiply1' */
 
   /* Product: '<S109>/Multiply2' */
   for (i = 0; i < 3; i++) {
-    rtb_Add_jo[i] = rtb_VectorConcatenate_f[i + 6] * rtb_Sum_nh[2] +
+    rtb_Add_n[i] = rtb_VectorConcatenate_f[i + 6] * rtb_Sum_nh[2] +
       (rtb_VectorConcatenate_f[i + 3] * rtb_Sum_nh[1] +
        rtb_VectorConcatenate_f[i] * rtb_Sum_nh[0]);
   }
@@ -2941,9 +2933,9 @@ void Plant_step(void)
    *  Delay: '<Root>/Delay'
    */
   for (i = 0; i < 3; i++) {
-    rtb_Sum_nh[i] = Plant_Y.Extended_States.M_BO[i + 6] * rtb_Add_jo[2] +
-      (Plant_Y.Extended_States.M_BO[i + 3] * rtb_Add_jo[1] +
-       Plant_Y.Extended_States.M_BO[i] * rtb_Add_jo[0]);
+    rtb_Sum_nh[i] = Plant_Y.Extended_States.M_BO[i + 6] * rtb_Add_n[2] +
+      (Plant_Y.Extended_States.M_BO[i + 3] * rtb_Add_n[1] +
+       Plant_Y.Extended_States.M_BO[i] * rtb_Add_n[0]);
   }
 
   /* End of Product: '<S106>/Product' */
@@ -2951,18 +2943,18 @@ void Plant_step(void)
     /* Sum: '<S112>/Sum' incorporates:
      *  Product: '<S112>/Product'
      */
-    rtb_Add_c = (Plant_ConstB.Add[i + 3] * rtb_Sum_nh[1] + Plant_ConstB.Add[i] *
-                 rtb_Sum_nh[0]) + Plant_ConstB.Add[i + 6] * rtb_Sum_nh[2];
+    rtb_Add_ju = (Plant_ConstB.Add[i + 3] * rtb_Sum_nh[1] + Plant_ConstB.Add[i] *
+                  rtb_Sum_nh[0]) + Plant_ConstB.Add[i + 6] * rtb_Sum_nh[2];
 
     /* Saturate: '<S107>/Saturation' incorporates:
      *  Sum: '<S112>/Sum'
      */
-    if (rtb_Add_c > 4.0F) {
-      rtb_Add_jo[i] = 4.0F;
-    } else if (rtb_Add_c < -4.0F) {
-      rtb_Add_jo[i] = -4.0F;
+    if (rtb_Add_ju > 4.0F) {
+      rtb_Add_n[i] = 4.0F;
+    } else if (rtb_Add_ju < -4.0F) {
+      rtb_Add_n[i] = -4.0F;
     } else {
-      rtb_Add_jo[i] = rtb_Add_c;
+      rtb_Add_n[i] = rtb_Add_ju;
     }
 
     /* End of Saturate: '<S107>/Saturation' */
@@ -2974,17 +2966,17 @@ void Plant_step(void)
                Plant_DW.RandomSource_STATE_DWORK, 3, 1);
 
   /* Sum: '<S107>/Add' */
-  rtb_Add_jo[0] += rtb_Sum_nh[0];
-  rtb_Add_jo[1] += rtb_Sum_nh[1];
+  rtb_Add_n[0] += rtb_Sum_nh[0];
+  rtb_Add_n[1] += rtb_Sum_nh[1];
 
   /* BusAssignment: '<S103>/Bus Assignment' incorporates:
    *  Memory: '<S53>/Memory1'
    *  Sum: '<S107>/Add'
    */
   rtb_BusAssignment_o.timestamp = Plant_DW.Memory1_PreviousInput;
-  rtb_BusAssignment_o.mag_x = rtb_Add_jo[0];
-  rtb_BusAssignment_o.mag_y = rtb_Add_jo[1];
-  rtb_BusAssignment_o.mag_z = rtb_Add_jo[2] + rtb_Sum_nh[2];
+  rtb_BusAssignment_o.mag_x = rtb_Add_n[0];
+  rtb_BusAssignment_o.mag_y = rtb_Add_n[1];
+  rtb_BusAssignment_o.mag_z = rtb_Add_n[2] + rtb_Sum_nh[2];
 
   /* RateTransition: '<S103>/Rate Transition' */
   if (Plant_M->Timing.TaskCounters.TID[1] == 0) {
@@ -3006,7 +2998,7 @@ void Plant_step(void)
    */
   Plant_Y.IMU.acc_x = rtb_Product2_e + rtb_RandomSource_f[0];
   Plant_Y.IMU.acc_y = rtb_Gain_g2 + rtb_RandomSource_f[1];
-  Plant_Y.IMU.acc_z = rtb_torque_B_Nm_idx_2 + rtb_RandomSource_f[2];
+  Plant_Y.IMU.acc_z = rtb_Deg2Rad + rtb_RandomSource_f[2];
 
   /* End of Outputs for SubSystem: '<S5>/Sensor_IMU' */
   /* End of Outputs for SubSystem: '<Root>/Sensor_Model' */
