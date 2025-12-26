@@ -3,9 +3,9 @@
  *
  * Code generated for Simulink model 'Controller'.
  *
- * Model version                  : 1.981
+ * Model version                  : 1.1081
  * Simulink Coder version         : 9.0 (R2018b) 24-May-2018
- * C/C++ source code generated on : Thu Sep 18 14:39:21 2025
+ * C/C++ source code generated on : Fri Dec 26 22:51:00 2025
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: ARM Compatible->ARM Cortex
@@ -182,6 +182,7 @@ typedef struct {
 
   /* home position [x y h yaw], unit [m m m rad] */
   real32_T home[4];
+  boolean_T ongound;
   uint32_T error;
 } FMS_Out_Bus;
 
@@ -220,6 +221,7 @@ typedef struct {
   real32_T h_AGL;
   uint32_T flag;
   uint32_T status;
+  real32_T hinge_angle;
 } INS_Out_Bus;
 
 #endif

@@ -52,4 +52,7 @@
 
 // #define FMT_SKIP_GPS_UBX_CONFIG
 
+/* Feed INS with dual-IMU body-frame outputs when available */
+#define INS_USE_DUAL_IMU_ATT
+
 #endif

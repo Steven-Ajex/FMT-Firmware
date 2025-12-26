@@ -3,9 +3,9 @@
  *
  * Code generated for Simulink model 'Controller'.
  *
- * Model version                  : 1.981
+ * Model version                  : 1.1081
  * Simulink Coder version         : 9.0 (R2018b) 24-May-2018
- * C/C++ source code generated on : Thu Sep 18 14:39:21 2025
+ * C/C++ source code generated on : Fri Dec 26 22:51:00 2025
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: ARM Compatible->ARM Cortex
@@ -18,21 +18,30 @@
 
 /* Invariant block signals (default storage) */
 const ConstB_Controller_T Controller_ConstB = {
-  { 0.0F, 0.0F, 1.0F },                /* '<S102>/Vector Concatenate3' */
-  0.0F,                                /* '<S105>/Constant' */
-  19.1986F,                            /* '<S89>/Gain' */
+  { 0.0F, 0.0F, 1.0F },                /* '<S101>/Vector Concatenate3' */
+  0.0F,                                /* '<S104>/Constant' */
+  19.1986F,                            /* '<S88>/Gain' */
 
-  { 0.0F, 0.0F, 0.0F },                /* '<S77>/Constant' */
-  0.00250000018F,                      /* '<S103>/Square' */
-  0.14709F,                            /* '<S103>/Multiply' */
-  -58.836F,                            /* '<S103>/Gain4' */
-  0.00250000018F,                      /* '<S118>/Square' */
-  0.196120009F,                        /* '<S118>/Multiply' */
-  -78.448F                             /* '<S118>/Gain4' */
+  { 0.0F, 0.0F, 0.0F },                /* '<S76>/Constant' */
+  0.00250000018F,                      /* '<S102>/Square' */
+  0.14709F,                            /* '<S102>/Multiply' */
+  -58.836F,                            /* '<S102>/Gain4' */
+  0.00250000018F,                      /* '<S117>/Square' */
+  0.196120009F,                        /* '<S117>/Multiply' */
+  -78.448F                             /* '<S117>/Gain4' */
 };
 
 /* Constant parameters (default storage) */
 const ConstP_Controller_T Controller_ConstP = {
+
+#if AIRFRAME == 1
+
+  /* Expression: [2; 2; 1; 5]
+   * Referenced by: '<S14>/Constant7'
+   */
+  { 2.0, 2.0, 1.0, 5.0 },
+
+#endif
 
 #if AIRFRAME == 6
 
@@ -110,16 +119,6 @@ const ConstP_Controller_T Controller_ConstP = {
    * Referenced by: '<S13>/Effective_Matrix'
    */
   { -2.0F, 2.0F, 0.0F, 0.0F, 0.0F, 0.0F, 2.0F, -2.0F, 1.0F, 1.0F, -1.0F, -1.0F },
-
-#endif
-
-#if AIRFRAME == 1
-
-  /* Computed Parameter: Effective_Matrix_Value_h
-   * Referenced by: '<S14>/Effective_Matrix'
-   */
-  { -1.41421354F, 1.41421354F, 1.41421354F, -1.41421354F, 1.41421354F,
-    -1.41421354F, 1.41421354F, -1.41421354F, 1.0F, 1.0F, -1.0F, -1.0F },
 
 #endif
 

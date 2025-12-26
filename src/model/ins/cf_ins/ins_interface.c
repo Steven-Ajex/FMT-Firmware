@@ -20,6 +20,9 @@
 #include "module/log/mlog.h"
 #include "module/param/param.h"
 #include "module/sensor/sensor_hub.h"
+#ifdef INS_USE_DUAL_IMU_ATT
+    #include "task_dual_imu_attitude.h"
+#endif
 
 #ifdef BIT
     #undef BIT
@@ -35,6 +38,9 @@ MCN_DECLARE(sensor_gps);
 MCN_DECLARE(sensor_rangefinder);
 MCN_DECLARE(sensor_optflow);
 MCN_DECLARE(sensor_airspeed);
+#ifdef INS_USE_DUAL_IMU_ATT
+MCN_DECLARE(dual_imu_att);
+#endif
 
 /* External Position */
 MCN_DEFINE(external_pos, sizeof(External_Pos_Bus));
@@ -227,6 +233,11 @@ static struct INS_Handler {
     McnNode_t optflow_sub_node_t;
     McnNode_t airspeed_sub_node_t;
     McnNode_t ext_pos_sub_node_t;
+#ifdef INS_USE_DUAL_IMU_ATT
+    McnNode_t dual_imu_sub_node_t;
+    uint8_t dual_imu_ready;
+    dual_imu_att_output_t dual_imu_report;
+#endif
 
     imu_data_t imu_report;
     mag_data_t mag_report;
@@ -375,8 +386,52 @@ static void init_parameter(void)
 
 void ins_interface_step(uint32_t timestamp)
 {
+    /* default hinge angle input */
+    INS_U.Hinge_angle_g.timestamp = timestamp;
+    INS_U.Hinge_angle_g.hinge_angle = 0.0f;
+
+#ifdef INS_USE_DUAL_IMU_ATT
+    bool dual_imu_updated = false;
+
+    if (ins_handle.dual_imu_sub_node_t && mcn_poll(ins_handle.dual_imu_sub_node_t)) {
+        if (mcn_copy(MCN_HUB(dual_imu_att), ins_handle.dual_imu_sub_node_t, &ins_handle.dual_imu_report) == FMT_EOK) {
+            ins_handle.dual_imu_ready = 1;
+            dual_imu_updated = true;
+        }
+    }
+
+    if (ins_handle.dual_imu_ready) {
+        const dual_imu_att_output_t* dual_att = &ins_handle.dual_imu_report;
+
+        INS_U.Hinge_angle_g.timestamp = dual_att->timestamp_ms;
+        INS_U.Hinge_angle_g.hinge_angle = dual_att->hinge_theta;
+
+        INS_U.IMU.gyr_x = dual_att->gyr_b[0];
+        INS_U.IMU.gyr_y = dual_att->gyr_b[1];
+        INS_U.IMU.gyr_z = dual_att->gyr_b[2];
+        INS_U.IMU.acc_x = dual_att->acc_b_cg[0];
+        INS_U.IMU.acc_y = dual_att->acc_b_cg[1];
+        INS_U.IMU.acc_z = dual_att->acc_b_cg[2];
+        INS_U.IMU.timestamp = timestamp;
+
+        INS_U.MAG.mag_x = dual_att->mag_b_cg[0];
+        INS_U.MAG.mag_y = dual_att->mag_b_cg[1];
+        INS_U.MAG.mag_z = dual_att->mag_b_cg[2];
+        INS_U.MAG.timestamp = timestamp;
+
+        if (dual_imu_updated) {
+            imu_data_updated = 1;
+            mag_data_updated = 1;
+        }
+    }
+#endif
+
     /* get sensor data */
-    if (mcn_poll(ins_handle.imu_sub_node_t)) {
+    if (
+#ifdef INS_USE_DUAL_IMU_ATT
+        !ins_handle.dual_imu_ready &&
+#endif
+        mcn_poll(ins_handle.imu_sub_node_t)) {
         mcn_copy(MCN_HUB(sensor_imu0), ins_handle.imu_sub_node_t, &ins_handle.imu_report);
 
         INS_U.IMU.gyr_x = ins_handle.imu_report.gyr_B_radDs[0];
@@ -391,7 +446,11 @@ void ins_interface_step(uint32_t timestamp)
         imu_data_updated = 1;
     }
 
-    if (mcn_poll(ins_handle.mag_sub_node_t)) {
+    if (
+#ifdef INS_USE_DUAL_IMU_ATT
+        !ins_handle.dual_imu_ready &&
+#endif
+        mcn_poll(ins_handle.mag_sub_node_t)) {
         mcn_copy(MCN_HUB(sensor_mag0), ins_handle.mag_sub_node_t, &ins_handle.mag_report);
 
         INS_U.MAG.mag_x = ins_handle.mag_report.mag_B_gauss[0];
@@ -560,6 +619,9 @@ void ins_interface_init(void)
     ins_handle.optflow_sub_node_t = mcn_subscribe(MCN_HUB(sensor_optflow), NULL);
     ins_handle.airspeed_sub_node_t = mcn_subscribe(MCN_HUB(sensor_airspeed), NULL);
     ins_handle.ext_pos_sub_node_t = mcn_subscribe(MCN_HUB(external_pos), NULL);
+#ifdef INS_USE_DUAL_IMU_ATT
+    ins_handle.dual_imu_sub_node_t = mcn_subscribe(MCN_HUB(dual_imu_att), NULL);
+#endif
 
     IMU_ID = mlog_get_bus_id("IMU");
     MAG_ID = mlog_get_bus_id("MAG");
