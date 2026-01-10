@@ -26,10 +26,10 @@
  * e.g. add to CPPDEFINES: BRIDGE_ENABLE_TX=1, BRIDGE_ENABLE_RX=0 on TX-only node
  */
 #ifndef BRIDGE_ENABLE_TX
-    #define BRIDGE_ENABLE_TX 1
+    #define BRIDGE_ENABLE_TX 0
 #endif
 #ifndef BRIDGE_ENABLE_RX
-    #define BRIDGE_ENABLE_RX 0
+    #define BRIDGE_ENABLE_RX 1
 #endif
 
 /* MCN topics we consume */
