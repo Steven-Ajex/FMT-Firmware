@@ -31,9 +31,11 @@
 #define FMT_OUTPUT_PILOT_CMD
 
 /* MLog */
-#define MLOG_BUFFER_SIZE         80 * 1024
+#define MLOG_BUFFER_SIZE         (160 * 1024)
 #define MLOG_SECTOR_SIZE         4096
 #define MLOG_MAX_SECTOR_TO_WRITE 5
+#define MLOG_BLOCK_ON_FULL
+#define MLOG_BLOCK_SLEEP_MS      1
 
 /* ULog */
 #define FMT_USING_ULOG

@@ -29,6 +29,12 @@
 
 #define WRITE_PAYLOAD(_payload, _len) write(mlog_handle.fid, _payload, _len);
 
+#ifdef MLOG_BLOCK_ON_FULL
+#ifndef MLOG_BLOCK_SLEEP_MS
+#define MLOG_BLOCK_SLEEP_MS 1
+#endif
+#endif
+
 struct mlog_cb {
     void (*func)(void);
     struct list_head link;
@@ -343,12 +349,26 @@ fmt_err_t mlog_push_msg(const uint8_t* payload, uint8_t msg_id, uint16_t len)
 
     /* check if buffer has enough space to store msg */
     if (buffer_is_full(len + 4)) {
+#ifdef MLOG_BLOCK_ON_FULL
+        /* Block until logger drains buffer to keep log complete. */
+        while (buffer_is_full(len + 4)) {
+            if (mlog_handle.log_status != MLOG_STATUS_LOGGING) {
+                return FMT_EEMPTY;
+            }
+            /* do not let it print too fast */
+            PERIOD_EXECUTE(mlog_buff_full, 1000, ulog_w(TAG, "buffer is full, waiting..."););
+            /* wake logger to flush data */
+            invoke_callback_func(MLOG_CB_UPDATE);
+            sys_msleep(MLOG_BLOCK_SLEEP_MS);
+        }
+#else
         /* do not let it print too fast */
         PERIOD_EXECUTE(mlog_buff_full, 1000, ulog_w(TAG, "buffer is full!"););
 
         mlog_handle.stats[msg_id].lost_msg += 1;
 
         return FMT_EFULL;
+#endif
     }
 
     rt_mutex_take(&mlog_handle.lock, RT_WAITING_FOREVER);
