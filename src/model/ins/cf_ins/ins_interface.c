@@ -221,6 +221,7 @@ mlog_elem_t INS_Out_Elems[] = {
     MLOG_ELEMENT(h_AGL, MLOG_FLOAT),
     MLOG_ELEMENT(flag, MLOG_UINT32),
     MLOG_ELEMENT(status, MLOG_UINT32),
+    MLOG_ELEMENT(hinge_angle, MLOG_FLOAT),
 };
 MLOG_BUS_DEFINE(INS_Out, INS_Out_Elems);
 

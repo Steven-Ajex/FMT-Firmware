@@ -30,6 +30,8 @@ static mlog_elem_t DualIMUAtt_Elems[] = {
     MLOG_ELEMENT_VEC(acc_b_R, MLOG_FLOAT, 3),
     MLOG_ELEMENT_VEC(mag_b_L, MLOG_FLOAT, 3),
     MLOG_ELEMENT_VEC(mag_b_R, MLOG_FLOAT, 3),
+    MLOG_ELEMENT_VEC(gyr_b_L, MLOG_FLOAT, 3),
+    MLOG_ELEMENT_VEC(gyr_b_R, MLOG_FLOAT, 3),
     MLOG_ELEMENT_VEC(gyr_b, MLOG_FLOAT, 3),
     MLOG_ELEMENT_VEC(acc_b_cg, MLOG_FLOAT, 3),
     MLOG_ELEMENT_VEC(mag_b_cg, MLOG_FLOAT, 3),
