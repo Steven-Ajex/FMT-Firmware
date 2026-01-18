@@ -3,9 +3,9 @@
  *
  * Code generated for Simulink model 'Controller'.
  *
- * Model version                  : 1.1083
+ * Model version                  : 1.1085
  * Simulink Coder version         : 9.0 (R2018b) 24-May-2018
- * C/C++ source code generated on : Sat Jan 10 11:57:08 2026
+ * C/C++ source code generated on : Sun Jan 18 13:24:58 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: ARM Compatible->ARM Cortex
@@ -33,15 +33,6 @@ const ConstB_Controller_T Controller_ConstB = {
 
 /* Constant parameters (default storage) */
 const ConstP_Controller_T Controller_ConstP = {
-
-#if AIRFRAME == 1
-
-  /* Expression: [2; 2; 1; 5]
-   * Referenced by: '<S14>/Constant7'
-   */
-  { 2.0, 2.0, 1.0, 5.0 },
-
-#endif
 
 #if AIRFRAME == 6
 

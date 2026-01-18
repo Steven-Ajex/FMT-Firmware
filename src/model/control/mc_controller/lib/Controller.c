@@ -3,9 +3,9 @@
  *
  * Code generated for Simulink model 'Controller'.
  *
- * Model version                  : 1.1083
+ * Model version                  : 1.1085
  * Simulink Coder version         : 9.0 (R2018b) 24-May-2018
- * C/C++ source code generated on : Sat Jan 10 11:57:08 2026
+ * C/C++ source code generated on : Sun Jan 18 13:24:58 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: ARM Compatible->ARM Cortex
@@ -2622,89 +2622,70 @@ void Controller_step(void)
 
   /* Output and update for atomic system: '<S4>/Quadcopter_x' */
   {
-    real32_T r_e[12];
-    real32_T theta_vec_e[4];
+    real32_T rx_e[4];
+    real32_T ry_e[4];
     real32_T B4_e[16];
-    real32_T Braw_e[32];
     real32_T Mx_max_e;
     real32_T My_max_e;
     real32_T Mz_max_e;
     real32_T T_max_e;
-    int32_T i_e;
-    static const int8_T b_e[4] = { 1, 1, -1, -1 };
-
+    real32_T M_e[32];
+    real32_T s_e;
+    real32_T fro2_e;
+    int32_T j_e;
     real32_T rtb_Delay[8];
-    real32_T rtb_TmpSignalConversionAtSFunct[4];
     real32_T rtb_B4x8[32];
+    int32_T i_e;
     uint16_T u0_e;
-    int32_T B4_tmp_e;
-    int32_T rtb_B4x8_tmp_e;
-    int32_T rtb_B4x8_tmp_o;
-    int32_T rtb_B4x8_tmp_h;
+    real32_T st_tmp_e;
+    real32_T theta_tmp_e;
+    real32_T B4_tmp_e;
+    real32_T B4_tmp_o;
+    int32_T M_tmp_e;
 
     /* MATLAB Function: '<S14>/MATLAB Function1' incorporates:
-     *  Constant: '<S14>/Constant'
-     *  Constant: '<S14>/Constant1'
-     *  Constant: '<S14>/Constant2'
-     *  Constant: '<S14>/Constant3'
      *  Inport: '<Root>/INS_Out'
      */
-    r_e[0] = 0.3226F;
-    r_e[3] = -0.3226F;
-    r_e[6] = 0.3226F;
-    r_e[9] = -0.3226F;
-    r_e[1] = 0.2904F;
-    r_e[4] = -0.2904F;
-    r_e[7] = -0.2904F;
-    r_e[10] = 0.2904F;
-    r_e[2] = 0.0769F;
-    r_e[5] = 0.0769F;
-    r_e[8] = 0.0769F;
-    r_e[11] = 0.0769F;
-    for (i_e = 0; i_e < 4; i_e++) {
-      Mx_max_e = r_e[3 * i_e + 1];
-      if (Mx_max_e >= 0.0F) {
-        Mz_max_e = Controller_U.INS_Out.hinge_angle;
-      } else {
-        Mz_max_e = -Controller_U.INS_Out.hinge_angle;
-      }
-
-      My_max_e = arm_sin_f32(Mz_max_e);
-      Mz_max_e = arm_cos_f32(Mz_max_e);
-      B4_tmp_e = i_e << 2;
-      B4_e[B4_tmp_e] = Mx_max_e * -Mz_max_e - r_e[3 * i_e + 2] * My_max_e;
-      Mx_max_e = r_e[3 * i_e];
-      B4_e[1 + B4_tmp_e] = 0.0F - Mx_max_e * -Mz_max_e;
-      B4_e[2 + B4_tmp_e] = Mx_max_e * My_max_e + (real32_T)b_e[i_e] * 0.05F;
-      B4_e[3 + B4_tmp_e] = Mz_max_e;
-    }
-
-    memset(&Braw_e[0], 0, sizeof(real32_T) << 5U);
-    for (i_e = 0; i_e < 4; i_e++) {
-      B4_tmp_e = i_e << 2;
-      Braw_e[B4_tmp_e] = B4_e[B4_tmp_e];
-      Braw_e[1 + B4_tmp_e] = B4_e[B4_tmp_e + 1];
-      Braw_e[2 + B4_tmp_e] = B4_e[B4_tmp_e + 2];
-      Braw_e[3 + B4_tmp_e] = B4_e[B4_tmp_e + 3];
-      theta_vec_e[i_e] = fabsf(Braw_e[B4_tmp_e]);
-    }
-
-    Mx_max_e = Controller_sum(theta_vec_e);
-    theta_vec_e[0] = fabsf(Braw_e[1]);
-    theta_vec_e[1] = fabsf(Braw_e[5]);
-    theta_vec_e[2] = fabsf(Braw_e[9]);
-    theta_vec_e[3] = fabsf(Braw_e[13]);
-    My_max_e = Controller_sum(theta_vec_e);
-    theta_vec_e[0] = fabsf(Braw_e[2]);
-    theta_vec_e[1] = fabsf(Braw_e[6]);
-    theta_vec_e[2] = fabsf(Braw_e[10]);
-    theta_vec_e[3] = fabsf(Braw_e[14]);
-    Mz_max_e = Controller_sum(theta_vec_e);
-    theta_vec_e[0] = Braw_e[3];
-    theta_vec_e[1] = Braw_e[7];
-    theta_vec_e[2] = Braw_e[11];
-    theta_vec_e[3] = Braw_e[15];
-    T_max_e = Controller_sum(theta_vec_e);
+    Mx_max_e = arm_sin_f32(Controller_U.INS_Out.hinge_angle);
+    s_e = arm_cos_f32(Controller_U.INS_Out.hinge_angle);
+    B4_tmp_o = -((0.2904F * s_e - 0.0769F * Mx_max_e) * s_e + (0.2904F *
+      Mx_max_e + 0.0769F * s_e) * Mx_max_e);
+    B4_e[1] = 0.3226F * s_e + 0.05F * Mx_max_e;
+    B4_e[2] = 0.3226F * Mx_max_e + 0.05F * -s_e;
+    st_tmp_e = arm_sin_f32(-Controller_U.INS_Out.hinge_angle);
+    theta_tmp_e = arm_cos_f32(-Controller_U.INS_Out.hinge_angle);
+    B4_tmp_e = -((-0.2904F * theta_tmp_e - 0.0769F * st_tmp_e) * theta_tmp_e + (
+      -0.2904F * st_tmp_e + 0.0769F * theta_tmp_e) * st_tmp_e);
+    B4_e[5] = -0.3226F * theta_tmp_e + 0.05F * st_tmp_e;
+    B4_e[6] = -0.3226F * st_tmp_e + 0.05F * -theta_tmp_e;
+    fro2_e = -((-0.2904F * theta_tmp_e - 0.0769F * st_tmp_e) * theta_tmp_e +
+               (-0.2904F * st_tmp_e + 0.0769F * theta_tmp_e) * st_tmp_e);
+    B4_e[9] = 0.3226F * theta_tmp_e + -0.05F * st_tmp_e;
+    B4_e[10] = 0.3226F * st_tmp_e + -0.05F * -theta_tmp_e;
+    st_tmp_e = -((0.2904F * s_e - 0.0769F * Mx_max_e) * s_e + (0.2904F *
+      Mx_max_e + 0.0769F * s_e) * Mx_max_e);
+    B4_e[13] = -0.3226F * s_e + -0.05F * Mx_max_e;
+    B4_e[14] = -0.3226F * Mx_max_e + -0.05F * -s_e;
+    rx_e[0] = fabsf(B4_tmp_o);
+    rx_e[1] = fabsf(B4_tmp_e);
+    rx_e[2] = fabsf(fro2_e);
+    rx_e[3] = fabsf(st_tmp_e);
+    Mx_max_e = Controller_sum(rx_e);
+    rx_e[0] = fabsf(B4_e[1]);
+    rx_e[1] = fabsf(B4_e[5]);
+    rx_e[2] = fabsf(B4_e[9]);
+    rx_e[3] = fabsf(B4_e[13]);
+    My_max_e = Controller_sum(rx_e);
+    rx_e[0] = fabsf(B4_e[2]);
+    rx_e[1] = fabsf(B4_e[6]);
+    rx_e[2] = fabsf(B4_e[10]);
+    rx_e[3] = fabsf(B4_e[14]);
+    Mz_max_e = Controller_sum(rx_e);
+    rx_e[0] = s_e;
+    rx_e[1] = theta_tmp_e;
+    rx_e[2] = theta_tmp_e;
+    rx_e[3] = s_e;
+    T_max_e = Controller_sum(rx_e);
     if (Mx_max_e < 1.0E-6F) {
       Mx_max_e = 1.0F;
     }
@@ -2721,90 +2702,75 @@ void Controller_step(void)
       T_max_e = 1.0F;
     }
 
-    memset(&B4_e[0], 0, sizeof(real32_T) << 4U);
-    B4_e[0] = 1.0F / Mx_max_e;
-    B4_e[5] = 1.0F / My_max_e;
-    B4_e[10] = 1.0F / Mz_max_e;
-    B4_e[15] = 1.0F / T_max_e;
-    for (i_e = 0; i_e < 4; i_e++) {
-      for (B4_tmp_e = 0; B4_tmp_e < 8; B4_tmp_e++) {
-        rtb_B4x8_tmp_e = B4_tmp_e << 2;
-        rtb_B4x8_tmp_o = i_e + rtb_B4x8_tmp_e;
-        rtb_B4x8[rtb_B4x8_tmp_o] = 0.0F;
-        rtb_B4x8_tmp_h = rtb_B4x8_tmp_e + i_e;
-        rtb_B4x8[rtb_B4x8_tmp_o] = rtb_B4x8[rtb_B4x8_tmp_h] +
-          Braw_e[rtb_B4x8_tmp_e] * B4_e[i_e];
-        rtb_B4x8[rtb_B4x8_tmp_o] = Braw_e[rtb_B4x8_tmp_e + 1] * B4_e[i_e + 4] +
-          rtb_B4x8[rtb_B4x8_tmp_h];
-        rtb_B4x8[rtb_B4x8_tmp_o] = Braw_e[rtb_B4x8_tmp_e + 2] * B4_e[i_e + 8] +
-          rtb_B4x8[rtb_B4x8_tmp_h];
-        rtb_B4x8[rtb_B4x8_tmp_o] = Braw_e[rtb_B4x8_tmp_e + 3] * B4_e[i_e + 12] +
-          rtb_B4x8[rtb_B4x8_tmp_h];
-      }
-
-      /* MATLAB Function: '<S14>/MATLAB Function2' incorporates:
-       *  Constant: '<S14>/Constant7'
-       */
-      theta_vec_e[i_e] = (real32_T)Controller_ConstP.Constant7_Value[i_e];
-    }
+    memset(&rtb_B4x8[0], 0, sizeof(real32_T) << 5U);
+    rtb_B4x8[0] = B4_tmp_o / Mx_max_e;
+    rtb_B4x8[1] = B4_e[1] / My_max_e;
+    rtb_B4x8[2] = B4_e[2] / Mz_max_e;
+    rtb_B4x8[3] = s_e / T_max_e;
+    rtb_B4x8[4] = B4_tmp_e / Mx_max_e;
+    rtb_B4x8[5] = B4_e[5] / My_max_e;
+    rtb_B4x8[6] = B4_e[6] / Mz_max_e;
+    rtb_B4x8[7] = theta_tmp_e / T_max_e;
+    rtb_B4x8[8] = fro2_e / Mx_max_e;
+    rtb_B4x8[9] = B4_e[9] / My_max_e;
+    rtb_B4x8[10] = B4_e[10] / Mz_max_e;
+    rtb_B4x8[11] = theta_tmp_e / T_max_e;
+    rtb_B4x8[12] = st_tmp_e / Mx_max_e;
+    rtb_B4x8[13] = B4_e[13] / My_max_e;
+    rtb_B4x8[14] = B4_e[14] / Mz_max_e;
+    rtb_B4x8[15] = s_e / T_max_e;
 
     /* End of MATLAB Function: '<S14>/MATLAB Function1' */
 
     /* MATLAB Function: '<S14>/MATLAB Function2' */
     memset(&B4_e[0], 0, sizeof(real32_T) << 4U);
-    B4_e[0] = theta_vec_e[0];
-    B4_e[5] = theta_vec_e[1];
-    B4_e[10] = theta_vec_e[2];
-    B4_e[15] = theta_vec_e[3];
+    B4_e[0] = 2.0F;
+    B4_e[5] = 2.0F;
+    B4_e[10] = 1.0F;
+    B4_e[15] = 5.0F;
 
     /* Delay: '<S14>/Delay' */
     for (i_e = 0; i_e < 8; i_e++) {
       rtb_Delay[i_e] = Controller_DW.Quadcopter_x.Delay_DSTATE[i_e];
     }
 
-    /* Saturate: '<S14>/Saturation1' */
+    /* Saturate: '<S14>/Saturation1' incorporates:
+     *  MATLAB Function: '<S14>/MATLAB Function'
+     *  SignalConversion: '<S57>/TmpSignal ConversionAt SFunction Inport2'
+     */
     if (rtb_Sum[0] > 1.0F) {
-      /* SignalConversion: '<S57>/TmpSignal ConversionAt SFunction Inport2' incorporates:
-       *  MATLAB Function: '<S14>/MATLAB Function'
-       */
-      rtb_TmpSignalConversionAtSFunct[0] = 1.0F;
+      ry_e[0] = 1.0F;
     } else if (rtb_Sum[0] < -1.0F) {
-      /* SignalConversion: '<S57>/TmpSignal ConversionAt SFunction Inport2' incorporates:
-       *  MATLAB Function: '<S14>/MATLAB Function'
-       */
-      rtb_TmpSignalConversionAtSFunct[0] = -1.0F;
+      ry_e[0] = -1.0F;
     } else {
-      /* SignalConversion: '<S57>/TmpSignal ConversionAt SFunction Inport2' incorporates:
-       *  MATLAB Function: '<S14>/MATLAB Function'
-       */
-      rtb_TmpSignalConversionAtSFunct[0] = rtb_Sum[0];
+      ry_e[0] = rtb_Sum[0];
     }
 
     if (rtb_Sum[1] > 1.0F) {
-      My_max_e = 1.0F;
+      s_e = 1.0F;
     } else if (rtb_Sum[1] < -1.0F) {
-      My_max_e = -1.0F;
+      s_e = -1.0F;
     } else {
-      My_max_e = rtb_Sum[1];
+      s_e = rtb_Sum[1];
     }
 
     if (rtb_Sum[2] > 1.0F) {
-      Mz_max_e = 1.0F;
+      B4_tmp_o = 1.0F;
     } else if (rtb_Sum[2] < -1.0F) {
-      Mz_max_e = -1.0F;
+      B4_tmp_o = -1.0F;
     } else {
-      Mz_max_e = rtb_Sum[2];
+      B4_tmp_o = rtb_Sum[2];
     }
 
     /* End of Saturate: '<S14>/Saturation1' */
 
     /* Saturate: '<S14>/Saturation2' */
     if (rtb_Saturation_i > 1.0F) {
-      Mx_max_e = 1.0F;
+      fro2_e = 1.0F;
     } else if (rtb_Saturation_i < -1.0F) {
-      Mx_max_e = -1.0F;
+      fro2_e = -1.0F;
     } else {
-      Mx_max_e = rtb_Saturation_i;
+      fro2_e = rtb_Saturation_i;
     }
 
     /* End of Saturate: '<S14>/Saturation2' */
@@ -2814,65 +2780,60 @@ void Controller_step(void)
      *  MATLAB Function: '<S14>/MATLAB Function'
      *  Sum: '<S14>/Sum'
      */
-    rtb_TmpSignalConversionAtSFunct[3] = Mx_max_e + CONTROL_PARAM.HOVER_THRO;
+    ry_e[3] = fro2_e + CONTROL_PARAM.HOVER_THRO;
 
     /* MATLAB Function: '<S14>/MATLAB Function' incorporates:
      *  Constant: '<S14>/Constant6'
      *  Delay: '<S14>/Delay'
      *  SignalConversion: '<S57>/TmpSignal ConversionAt SFunction Inport2'
      */
-    for (rtb_B4x8_tmp_e = 0; rtb_B4x8_tmp_e < 8; rtb_B4x8_tmp_e++) {
+    for (j_e = 0; j_e < 8; j_e++) {
       for (i_e = 0; i_e < 4; i_e++) {
-        B4_tmp_e = rtb_B4x8_tmp_e << 2;
-        Braw_e[i_e + B4_tmp_e] = ((rtb_B4x8[B4_tmp_e + 1] * B4_e[i_e + 4] +
-          rtb_B4x8[B4_tmp_e] * B4_e[i_e]) + rtb_B4x8[B4_tmp_e + 2] * B4_e[i_e +
-          8]) + rtb_B4x8[B4_tmp_e + 3] * B4_e[i_e + 12];
+        M_tmp_e = j_e << 2;
+        M_e[i_e + M_tmp_e] = ((rtb_B4x8[M_tmp_e + 1] * B4_e[i_e + 4] +
+          rtb_B4x8[M_tmp_e] * B4_e[i_e]) + rtb_B4x8[M_tmp_e + 2] * B4_e[i_e + 8])
+          + rtb_B4x8[M_tmp_e + 3] * B4_e[i_e + 12];
       }
     }
 
-    Mx_max_e = 0.0F;
+    fro2_e = 0.0F;
     for (i_e = 0; i_e < 4; i_e++) {
-      theta_vec_e[i_e] = ((B4_e[i_e + 4] * My_max_e + B4_e[i_e] *
-                           rtb_TmpSignalConversionAtSFunct[0]) + B4_e[i_e + 8] *
-                          Mz_max_e) + B4_e[i_e + 12] *
-        rtb_TmpSignalConversionAtSFunct[3];
-      for (B4_tmp_e = 0; B4_tmp_e < 8; B4_tmp_e++) {
-        T_max_e = Braw_e[(B4_tmp_e << 2) + i_e];
-        Mx_max_e += T_max_e * T_max_e;
+      rx_e[i_e] = ((B4_e[i_e + 4] * s_e + B4_e[i_e] * ry_e[0]) + B4_e[i_e + 8] *
+                   B4_tmp_o) + B4_e[i_e + 12] * ry_e[3];
+      for (j_e = 0; j_e < 8; j_e++) {
+        theta_tmp_e = M_e[(j_e << 2) + i_e];
+        fro2_e += theta_tmp_e * theta_tmp_e;
       }
     }
 
-    Mx_max_e = 1.0F / fmaxf(2.0F * Mx_max_e + 0.12F, 1.0E-6F);
+    fro2_e = 1.0F / fmaxf(2.0F * fro2_e + 0.12F, 1.0E-6F);
     for (i_e = 0; i_e < 20; i_e++) {
-      for (B4_tmp_e = 0; B4_tmp_e < 4; B4_tmp_e++) {
-        My_max_e = 0.0F;
-        for (rtb_B4x8_tmp_e = 0; rtb_B4x8_tmp_e < 8; rtb_B4x8_tmp_e++) {
-          My_max_e += Braw_e[(rtb_B4x8_tmp_e << 2) + B4_tmp_e] *
-            Controller_DW.Quadcopter_x.Delay_DSTATE[rtb_B4x8_tmp_e];
+      for (j_e = 0; j_e < 4; j_e++) {
+        s_e = 0.0F;
+        for (M_tmp_e = 0; M_tmp_e < 8; M_tmp_e++) {
+          s_e += M_e[(M_tmp_e << 2) + j_e] *
+            Controller_DW.Quadcopter_x.Delay_DSTATE[M_tmp_e];
         }
 
-        rtb_TmpSignalConversionAtSFunct[B4_tmp_e] = My_max_e -
-          theta_vec_e[B4_tmp_e];
+        ry_e[j_e] = s_e - rx_e[j_e];
       }
 
-      for (B4_tmp_e = 0; B4_tmp_e < 8; B4_tmp_e++) {
-        rtb_B4x8_tmp_e = B4_tmp_e << 2;
-        My_max_e = Controller_DW.Quadcopter_x.Delay_DSTATE[B4_tmp_e] -
-          ((((Braw_e[rtb_B4x8_tmp_e + 1] * rtb_TmpSignalConversionAtSFunct[1] +
-              Braw_e[rtb_B4x8_tmp_e] * rtb_TmpSignalConversionAtSFunct[0]) +
-             Braw_e[rtb_B4x8_tmp_e + 2] * rtb_TmpSignalConversionAtSFunct[2]) +
-            Braw_e[rtb_B4x8_tmp_e + 3] * rtb_TmpSignalConversionAtSFunct[3]) *
-           2.0F + (Controller_DW.Quadcopter_x.Delay_DSTATE[B4_tmp_e] -
-                   rtb_Delay[B4_tmp_e]) * 0.12F) * Mx_max_e;
-        if (My_max_e < 0.0F) {
-          My_max_e = 0.0F;
+      for (j_e = 0; j_e < 8; j_e++) {
+        M_tmp_e = j_e << 2;
+        s_e = Controller_DW.Quadcopter_x.Delay_DSTATE[j_e] - ((((M_e[M_tmp_e + 1]
+          * ry_e[1] + M_e[M_tmp_e] * ry_e[0]) + M_e[M_tmp_e + 2] * ry_e[2]) +
+          M_e[M_tmp_e + 3] * ry_e[3]) * 2.0F +
+          (Controller_DW.Quadcopter_x.Delay_DSTATE[j_e] - rtb_Delay[j_e]) *
+          0.12F) * fro2_e;
+        if (s_e < 0.0F) {
+          s_e = 0.0F;
         }
 
-        if (My_max_e > 1.0F) {
-          My_max_e = 1.0F;
+        if (s_e > 1.0F) {
+          s_e = 1.0F;
         }
 
-        Controller_DW.Quadcopter_x.Delay_DSTATE[B4_tmp_e] = My_max_e;
+        Controller_DW.Quadcopter_x.Delay_DSTATE[j_e] = s_e;
       }
     }
 
@@ -2900,16 +2861,15 @@ void Controller_step(void)
       /* Gain: '<S14>/Gain' incorporates:
        *  Delay: '<S14>/Delay'
        */
-      Mx_max_e = fmodf(floorf(1000.0F * Controller_DW.Quadcopter_x.Delay_DSTATE
-        [0]), 65536.0F);
+      fro2_e = fmodf(floorf(1000.0F * Controller_DW.Quadcopter_x.Delay_DSTATE[0]),
+                     65536.0F);
 
       /* Sum: '<S14>/Add' incorporates:
        *  Constant: '<S14>/Constant10'
        *  Gain: '<S14>/Gain'
        */
-      u0_e = (uint16_T)((Mx_max_e < 0.0F ? (int32_T)(uint16_T)-(int16_T)
-                         (uint16_T)-Mx_max_e : (int32_T)(uint16_T)Mx_max_e) +
-                        1000U);
+      u0_e = (uint16_T)((fro2_e < 0.0F ? (int32_T)(uint16_T)-(int16_T)(uint16_T)
+                         -fro2_e : (int32_T)(uint16_T)fro2_e) + 1000U);
 
       /* Saturate: '<S14>/Saturation' */
       if (u0_e > 1900) {
@@ -2926,16 +2886,15 @@ void Controller_step(void)
       /* Gain: '<S14>/Gain' incorporates:
        *  Delay: '<S14>/Delay'
        */
-      Mx_max_e = fmodf(floorf(1000.0F * Controller_DW.Quadcopter_x.Delay_DSTATE
-        [1]), 65536.0F);
+      fro2_e = fmodf(floorf(1000.0F * Controller_DW.Quadcopter_x.Delay_DSTATE[1]),
+                     65536.0F);
 
       /* Sum: '<S14>/Add' incorporates:
        *  Constant: '<S14>/Constant10'
        *  Gain: '<S14>/Gain'
        */
-      u0_e = (uint16_T)((Mx_max_e < 0.0F ? (int32_T)(uint16_T)-(int16_T)
-                         (uint16_T)-Mx_max_e : (int32_T)(uint16_T)Mx_max_e) +
-                        1000U);
+      u0_e = (uint16_T)((fro2_e < 0.0F ? (int32_T)(uint16_T)-(int16_T)(uint16_T)
+                         -fro2_e : (int32_T)(uint16_T)fro2_e) + 1000U);
 
       /* Saturate: '<S14>/Saturation' */
       if (u0_e > 1900) {
@@ -2952,16 +2911,15 @@ void Controller_step(void)
       /* Gain: '<S14>/Gain' incorporates:
        *  Delay: '<S14>/Delay'
        */
-      Mx_max_e = fmodf(floorf(1000.0F * Controller_DW.Quadcopter_x.Delay_DSTATE
-        [2]), 65536.0F);
+      fro2_e = fmodf(floorf(1000.0F * Controller_DW.Quadcopter_x.Delay_DSTATE[2]),
+                     65536.0F);
 
       /* Sum: '<S14>/Add' incorporates:
        *  Constant: '<S14>/Constant10'
        *  Gain: '<S14>/Gain'
        */
-      u0_e = (uint16_T)((Mx_max_e < 0.0F ? (int32_T)(uint16_T)-(int16_T)
-                         (uint16_T)-Mx_max_e : (int32_T)(uint16_T)Mx_max_e) +
-                        1000U);
+      u0_e = (uint16_T)((fro2_e < 0.0F ? (int32_T)(uint16_T)-(int16_T)(uint16_T)
+                         -fro2_e : (int32_T)(uint16_T)fro2_e) + 1000U);
 
       /* Saturate: '<S14>/Saturation' */
       if (u0_e > 1900) {
@@ -2978,16 +2936,15 @@ void Controller_step(void)
       /* Gain: '<S14>/Gain' incorporates:
        *  Delay: '<S14>/Delay'
        */
-      Mx_max_e = fmodf(floorf(1000.0F * Controller_DW.Quadcopter_x.Delay_DSTATE
-        [3]), 65536.0F);
+      fro2_e = fmodf(floorf(1000.0F * Controller_DW.Quadcopter_x.Delay_DSTATE[3]),
+                     65536.0F);
 
       /* Sum: '<S14>/Add' incorporates:
        *  Constant: '<S14>/Constant10'
        *  Gain: '<S14>/Gain'
        */
-      u0_e = (uint16_T)((Mx_max_e < 0.0F ? (int32_T)(uint16_T)-(int16_T)
-                         (uint16_T)-Mx_max_e : (int32_T)(uint16_T)Mx_max_e) +
-                        1000U);
+      u0_e = (uint16_T)((fro2_e < 0.0F ? (int32_T)(uint16_T)-(int16_T)(uint16_T)
+                         -fro2_e : (int32_T)(uint16_T)fro2_e) + 1000U);
 
       /* Saturate: '<S14>/Saturation' */
       if (u0_e > 1900) {
