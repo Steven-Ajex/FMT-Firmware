@@ -42,6 +42,32 @@
 #define DUAL_IMU_ACC_TRUST_MIN_G  0.8f   /* gate acc observation */
 #define DUAL_IMU_ACC_TRUST_MAX_G  1.2f
 
+/* Timing/health thresholds */
+#ifndef DUAL_IMU_DT_DEFAULT_S
+    #define DUAL_IMU_DT_DEFAULT_S 0.001f
+#endif
+#ifndef DUAL_IMU_DT_MIN_S
+    #define DUAL_IMU_DT_MIN_S     0.0002f
+#endif
+#ifndef DUAL_IMU_DT_MAX_S
+    #define DUAL_IMU_DT_MAX_S     0.02f
+#endif
+#ifndef DUAL_IMU_MAX_TIME_SKEW_MS
+    #define DUAL_IMU_MAX_TIME_SKEW_MS 5
+#endif
+#ifndef DUAL_IMU_MAX_IMU_STALE_MS
+    #define DUAL_IMU_MAX_IMU_STALE_MS 10
+#endif
+#ifndef DUAL_IMU_MAX_MAG_STALE_MS
+    #define DUAL_IMU_MAX_MAG_STALE_MS 50
+#endif
+#ifndef DUAL_IMU_MAG_NORM_RATIO_MAX
+    #define DUAL_IMU_MAG_NORM_RATIO_MAX 1.6f
+#endif
+#ifndef DUAL_IMU_GYR_MAX_RAD_S
+    #define DUAL_IMU_GYR_MAX_RAD_S 35.0f
+#endif
+
 /* Simple 2-state (theta, bias) Kalman tuning */
 #define DUAL_IMU_PROC_VAR_RATE    (0.02f * 0.02f)   /* (rad/s)^2 process on hinge rate */
 #define DUAL_IMU_PROC_VAR_BIAS    (1e-6f)           /* bias random walk */
@@ -77,8 +103,14 @@ typedef struct {
 
 static dual_imu_state_t g_state;
 static dual_imu_att_output_t g_att_out;
+#if DUAL_IMU_ATT_STATUS_ENABLE
+static dual_imu_att_status_t g_att_status;
+#endif
 
 MCN_DEFINE(dual_imu_att, sizeof(dual_imu_att_output_t));
+#if DUAL_IMU_ATT_STATUS_ENABLE
+MCN_DEFINE(dual_imu_att_status, sizeof(dual_imu_att_status_t));
+#endif
 
 static int echo_dual_imu_att(void* param)
 {
@@ -141,6 +173,32 @@ static float clampf(float v, float lo, float hi)
     return v;
 }
 
+static int32_t abs_i32(int32_t v)
+{
+    return v < 0 ? -v : v;
+}
+
+static int16_t clamp_i16(int32_t v)
+{
+    if (v > 32767) {
+        return 32767;
+    }
+    if (v < -32768) {
+        return -32768;
+    }
+    return (int16_t)v;
+}
+
+static uint16_t clamp_u16(uint32_t v)
+{
+    return v > 65535u ? 65535u : (uint16_t)v;
+}
+
+static bool vec3_isfinite(const float v[3])
+{
+    return isfinite(v[0]) && isfinite(v[1]) && isfinite(v[2]);
+}
+
 static void mat3_mul_vec(const float m[9], const float v[3], float out[3])
 {
     out[0] = m[0] * v[0] + m[1] * v[1] + m[2] * v[2];
@@ -148,13 +206,26 @@ static void mat3_mul_vec(const float m[9], const float v[3], float out[3])
     out[2] = m[6] * v[0] + m[7] * v[1] + m[8] * v[2];
 }
 
-static void rot_x(float angle, float R[9])
+static void rot_x_vec(float c, float s, const float v[3], float out[3])
 {
-    float c = cosf(angle);
-    float s = sinf(angle);
-    R[0] = 1.0f; R[1] = 0.0f; R[2] = 0.0f;
-    R[3] = 0.0f; R[4] = c;    R[5] = -s;
-    R[6] = 0.0f; R[7] = s;    R[8] = c;
+    out[0] = v[0];
+    out[1] = c * v[1] - s * v[2];
+    out[2] = s * v[1] + c * v[2];
+}
+
+static void rot_x_mul_mount(float c, float s, const float R_mount[9], float R_out[9])
+{
+    R_out[0] = R_mount[0];
+    R_out[1] = R_mount[1];
+    R_out[2] = R_mount[2];
+
+    R_out[3] = c * R_mount[3] - s * R_mount[6];
+    R_out[4] = c * R_mount[4] - s * R_mount[7];
+    R_out[5] = c * R_mount[5] - s * R_mount[8];
+
+    R_out[6] = s * R_mount[3] + c * R_mount[6];
+    R_out[7] = s * R_mount[4] + c * R_mount[7];
+    R_out[8] = s * R_mount[5] + c * R_mount[8];
 }
 
 static float hinge_obs_from_vecs(const float hinge[3], const float vL[3], const float vR[3])
@@ -178,8 +249,34 @@ static float hinge_obs_from_vecs(const float hinge[3], const float vL[3], const 
     return 0.5f * atan2f(sind, cosd);
 }
 
-static void hinge_update_kf(float dt, const imu_data_t* imuL, const imu_data_t* imuR, const mag_data_t* magL, const mag_data_t* magR, hinge_state_t* h)
+static void hinge_update_kf(float dt,
+                            const imu_data_t* imuL,
+                            const imu_data_t* imuR,
+                            const mag_data_t* magL,
+                            const mag_data_t* magR,
+                            hinge_state_t* h,
+                            uint32_t* obs_flags,
+                            float* acc_norm_L,
+                            float* acc_norm_R,
+                            float* mag_norm_L,
+                            float* mag_norm_R)
 {
+    if (obs_flags) {
+        *obs_flags = 0;
+    }
+    if (acc_norm_L) {
+        *acc_norm_L = 0.0f;
+    }
+    if (acc_norm_R) {
+        *acc_norm_R = 0.0f;
+    }
+    if (mag_norm_L) {
+        *mag_norm_L = 0.0f;
+    }
+    if (mag_norm_R) {
+        *mag_norm_R = 0.0f;
+    }
+
     /* State: [theta, bias]^T */
     float wL = imuL->gyr_B_radDs[0];
     float wR = imuR->gyr_B_radDs[0];
@@ -210,23 +307,52 @@ static void hinge_update_kf(float dt, const imu_data_t* imuL, const imu_data_t* 
     float accR[3] = { imuR->acc_B_mDs2[0], imuR->acc_B_mDs2[1], imuR->acc_B_mDs2[2] };
     float accnL = vec3_norm(accL);
     float accnR = vec3_norm(accR);
-    if ((accnL > (DUAL_IMU_ACC_TRUST_MIN_G * 9.8f)) && (accnL < (DUAL_IMU_ACC_TRUST_MAX_G * 9.8f))
-        && (accnR > (DUAL_IMU_ACC_TRUST_MIN_G * 9.8f)) && (accnR < (DUAL_IMU_ACC_TRUST_MAX_G * 9.8f))) {
+    if (acc_norm_L) {
+        *acc_norm_L = accnL;
+    }
+    if (acc_norm_R) {
+        *acc_norm_R = accnR;
+    }
+
+    const float hinge_axis[3] = { 1.0f, 0.0f, 0.0f };
+    bool acc_valid = (accnL > (DUAL_IMU_ACC_TRUST_MIN_G * 9.8f)) && (accnL < (DUAL_IMU_ACC_TRUST_MAX_G * 9.8f))
+                     && (accnR > (DUAL_IMU_ACC_TRUST_MIN_G * 9.8f)) && (accnR < (DUAL_IMU_ACC_TRUST_MAX_G * 9.8f));
+    if (acc_valid) {
         float gL[3] = { accL[0] / accnL, accL[1] / accnL, accL[2] / accnL };
         float gR[3] = { accR[0] / accnR, accR[1] / accnR, accR[2] / accnR };
-        const float hinge_axis[3] = { 1.0f, 0.0f, 0.0f };
         z = hinge_obs_from_vecs(hinge_axis, gL, gR);
         R_meas = DUAL_IMU_MEAS_VAR_ACC;
         have_obs = true;
+        if (obs_flags) {
+            *obs_flags |= DUAL_IMU_STATUS_ACC_TRUST;
+        }
     } else if (magL && magR) {
         float mL[3] = { magL->mag_B_gauss[0], magL->mag_B_gauss[1], magL->mag_B_gauss[2] };
         float mR[3] = { magR->mag_B_gauss[0], magR->mag_B_gauss[1], magR->mag_B_gauss[2] };
-        vec3_normalize(mL);
-        vec3_normalize(mR);
-        const float hinge_axis[3] = { 1.0f, 0.0f, 0.0f };
-        z = hinge_obs_from_vecs(hinge_axis, mL, mR);
-        R_meas = DUAL_IMU_MEAS_VAR_MAG;
-        have_obs = true;
+        float magnL = vec3_norm(mL);
+        float magnR = vec3_norm(mR);
+        if (mag_norm_L) {
+            *mag_norm_L = magnL;
+        }
+        if (mag_norm_R) {
+            *mag_norm_R = magnR;
+        }
+        if (magnL > 1e-6f && magnR > 1e-6f) {
+            float ratio = magnL / magnR;
+            if (ratio < 1.0f) {
+                ratio = 1.0f / ratio;
+            }
+            if (ratio <= DUAL_IMU_MAG_NORM_RATIO_MAX) {
+                vec3_normalize(mL);
+                vec3_normalize(mR);
+                z = hinge_obs_from_vecs(hinge_axis, mL, mR);
+                R_meas = DUAL_IMU_MEAS_VAR_MAG;
+                have_obs = true;
+                if (obs_flags) {
+                    *obs_flags |= DUAL_IMU_STATUS_MAG_TRUST;
+                }
+            }
+        }
     }
 
     /* If no observation, keep prediction */
@@ -261,33 +387,19 @@ static void att_compute_body_vectors(float dt,
 {
     const float pos_mount_L[3] = DUAL_IMU_LEFT_POS;
     const float pos_mount_R[3] = DUAL_IMU_RIGHT_POS;
-    /* Build arm rotations */
-    float R_arm_L[9];
-    float R_arm_R[9];
-    rot_x(theta, R_arm_L);
-    rot_x(-theta, R_arm_R);
-
+    float c = cosf(theta);
+    float s = sinf(theta);
     const float R_mount_L[9] = DUAL_IMU_LEFT_R_MOUNT;
     const float R_mount_R[9] = DUAL_IMU_RIGHT_R_MOUNT;
 
-    /* Compose R_bi = R_arm * R_mount */
     float R_bi_L[9];
     float R_bi_R[9];
     float pos_b_L[3];
     float pos_b_R[3];
-    /* Manual mat mul (R_arm * R_mount) */
-    for (int r = 0; r < 3; r++) {
-        for (int c = 0; c < 3; c++) {
-            R_bi_L[3 * r + c] = R_arm_L[3 * r + 0] * R_mount_L[0 + c]
-                                + R_arm_L[3 * r + 1] * R_mount_L[3 + c]
-                                + R_arm_L[3 * r + 2] * R_mount_L[6 + c];
-            R_bi_R[3 * r + c] = R_arm_R[3 * r + 0] * R_mount_R[0 + c]
-                                + R_arm_R[3 * r + 1] * R_mount_R[3 + c]
-                                + R_arm_R[3 * r + 2] * R_mount_R[6 + c];
-        }
-    }
-    mat3_mul_vec(R_arm_L, pos_mount_L, pos_b_L);
-    mat3_mul_vec(R_arm_R, pos_mount_R, pos_b_R);
+    rot_x_mul_mount(c, s, R_mount_L, R_bi_L);
+    rot_x_mul_mount(c, -s, R_mount_R, R_bi_R);
+    rot_x_vec(c, s, pos_mount_L, pos_b_L);
+    rot_x_vec(c, -s, pos_mount_R, pos_b_R);
 
     float acc_b_L[3];
     float acc_b_R[3];
@@ -379,8 +491,14 @@ static fmt_err_t dual_imu_att_init(void)
     g_state.hinge.P[0] = 1e-3f;
     g_state.hinge.P[3] = 1e-3f;
     memset(&g_att_out, 0, sizeof(g_att_out));
+#if DUAL_IMU_ATT_STATUS_ENABLE
+    memset(&g_att_status, 0, sizeof(g_att_status));
+#endif
 
     mcn_advertise(MCN_HUB(dual_imu_att), echo_dual_imu_att);
+#if DUAL_IMU_ATT_STATUS_ENABLE
+    mcn_advertise(MCN_HUB(dual_imu_att_status), NULL);
+#endif
     return FMT_EOK;
 }
 
@@ -391,6 +509,13 @@ static void dual_imu_att_entry(void* parameter)
 
     while (1) {
         if (check_timetag(TIMETAG(loop_tt))) {
+            uint32_t flags = 0;
+            uint32_t obs_flags = 0;
+            float acc_norm_L = 0.0f;
+            float acc_norm_R = 0.0f;
+            float mag_norm_L = 0.0f;
+            float mag_norm_R = 0.0f;
+
             (void)mcn_copy_from_hub(MCN_HUB(sensor_imu0), &g_state.imu_local);
             (void)mcn_copy_from_hub(MCN_HUB(bridge_imu), &g_state.imu_remote);
             (void)mcn_copy_from_hub(MCN_HUB(sensor_mag0), &g_state.mag_local);
@@ -398,21 +523,117 @@ static void dual_imu_att_entry(void* parameter)
 
             /* derive dt from local imu timestamp to match actual data rate */
             uint32_t cur_ts_ms = g_state.imu_local.timestamp_ms;
-            float dt = 0.001f;
+            uint32_t dt_ms = 0;
             if (last_ts_ms != 0 && cur_ts_ms > last_ts_ms) {
-                dt = (float)(cur_ts_ms - last_ts_ms) / 1000.0f;
+                dt_ms = cur_ts_ms - last_ts_ms;
+            }
+            float dt = dt_ms > 0 ? ((float)dt_ms / 1000.0f) : DUAL_IMU_DT_DEFAULT_S;
+            if (last_ts_ms != 0) {
+                if (dt_ms == 0 || dt_ms > DUAL_IMU_MAX_IMU_STALE_MS) {
+                    flags |= DUAL_IMU_STATUS_IMU_LOCAL_STALE;
+                }
+                if (dt < DUAL_IMU_DT_MIN_S || dt > DUAL_IMU_DT_MAX_S) {
+                    flags |= DUAL_IMU_STATUS_IMU_LOCAL_STALE;
+                    dt = DUAL_IMU_DT_DEFAULT_S;
+                }
             }
             last_ts_ms = cur_ts_ms;
 
-            hinge_update_kf(dt, &g_state.imu_local, &g_state.imu_remote, &g_state.mag_local, &g_state.mag_remote, &g_state.hinge);
-            att_compute_body_vectors(dt,
-                                     g_state.hinge.theta,
-                                     &g_state.imu_local,
-                                     &g_state.imu_remote,
-                                     &g_state.mag_local,
-                                     &g_state.mag_remote,
-                                     &g_state,
-                                     &g_att_out);
+            int32_t skew_ms = (int32_t)g_state.imu_local.timestamp_ms - (int32_t)g_state.imu_remote.timestamp_ms;
+            if (abs_i32(skew_ms) > DUAL_IMU_MAX_TIME_SKEW_MS) {
+                flags |= DUAL_IMU_STATUS_TIME_SKEW;
+            }
+
+            uint32_t remote_age_ms = cur_ts_ms >= g_state.imu_remote.timestamp_ms
+                                         ? (cur_ts_ms - g_state.imu_remote.timestamp_ms)
+                                         : 0;
+            if (remote_age_ms > DUAL_IMU_MAX_IMU_STALE_MS) {
+                flags |= DUAL_IMU_STATUS_IMU_REMOTE_STALE;
+            }
+
+            uint32_t mag_local_age_ms = cur_ts_ms >= g_state.mag_local.timestamp_ms
+                                            ? (cur_ts_ms - g_state.mag_local.timestamp_ms)
+                                            : 0;
+            uint32_t mag_remote_age_ms = cur_ts_ms >= g_state.mag_remote.timestamp_ms
+                                             ? (cur_ts_ms - g_state.mag_remote.timestamp_ms)
+                                             : 0;
+            if (mag_local_age_ms > DUAL_IMU_MAX_MAG_STALE_MS) {
+                flags |= DUAL_IMU_STATUS_MAG_LOCAL_STALE;
+            }
+            if (mag_remote_age_ms > DUAL_IMU_MAX_MAG_STALE_MS) {
+                flags |= DUAL_IMU_STATUS_MAG_REMOTE_STALE;
+            }
+            bool mag_valid = (flags & (DUAL_IMU_STATUS_MAG_LOCAL_STALE | DUAL_IMU_STATUS_MAG_REMOTE_STALE)) == 0;
+
+            if (!vec3_isfinite(g_state.imu_local.gyr_B_radDs)
+                || !vec3_isfinite(g_state.imu_local.acc_B_mDs2)
+                || !vec3_isfinite(g_state.imu_remote.gyr_B_radDs)
+                || !vec3_isfinite(g_state.imu_remote.acc_B_mDs2)
+                || !vec3_isfinite(g_state.mag_local.mag_B_gauss)
+                || !vec3_isfinite(g_state.mag_remote.mag_B_gauss)) {
+                flags |= DUAL_IMU_STATUS_NAN_DETECTED;
+            }
+
+            for (int i = 0; i < 3; i++) {
+                if (fabsf(g_state.imu_local.gyr_B_radDs[i]) > DUAL_IMU_GYR_MAX_RAD_S
+                    || fabsf(g_state.imu_remote.gyr_B_radDs[i]) > DUAL_IMU_GYR_MAX_RAD_S) {
+                    flags |= DUAL_IMU_STATUS_GYR_SAT;
+                    break;
+                }
+            }
+
+            if ((flags & DUAL_IMU_STATUS_NAN_DETECTED) == 0) {
+                hinge_update_kf(dt,
+                                &g_state.imu_local,
+                                &g_state.imu_remote,
+                                mag_valid ? &g_state.mag_local : NULL,
+                                mag_valid ? &g_state.mag_remote : NULL,
+                                &g_state.hinge,
+                                &obs_flags,
+                                &acc_norm_L,
+                                &acc_norm_R,
+                                &mag_norm_L,
+                                &mag_norm_R);
+                att_compute_body_vectors(dt,
+                                         g_state.hinge.theta,
+                                         &g_state.imu_local,
+                                         &g_state.imu_remote,
+                                         &g_state.mag_local,
+                                         &g_state.mag_remote,
+                                         &g_state,
+                                         &g_att_out);
+            }
+
+            flags |= obs_flags;
+            if ((flags & (DUAL_IMU_STATUS_TIME_SKEW
+                          | DUAL_IMU_STATUS_IMU_LOCAL_STALE
+                          | DUAL_IMU_STATUS_IMU_REMOTE_STALE
+                          | DUAL_IMU_STATUS_MAG_LOCAL_STALE
+                          | DUAL_IMU_STATUS_MAG_REMOTE_STALE
+                          | DUAL_IMU_STATUS_NAN_DETECTED
+                          | DUAL_IMU_STATUS_GYR_SAT)) == 0) {
+                flags |= DUAL_IMU_STATUS_VALID;
+            }
+
+            float gyr_diff_x = 0.0f;
+            if ((flags & DUAL_IMU_STATUS_NAN_DETECTED) == 0) {
+                gyr_diff_x = g_state.imu_remote.gyr_B_radDs[0] - g_state.imu_local.gyr_B_radDs[0];
+            }
+
+#if DUAL_IMU_ATT_STATUS_ENABLE
+            g_att_status.timestamp_ms = cur_ts_ms;
+            g_att_status.flags = flags;
+            g_att_status.time_skew_ms = clamp_i16(skew_ms);
+            g_att_status.dt_ms = clamp_u16(dt_ms);
+            g_att_status.hinge_theta = g_state.hinge.theta;
+            g_att_status.hinge_bias = g_state.hinge.theta_bias;
+            g_att_status.acc_norm_L = acc_norm_L;
+            g_att_status.acc_norm_R = acc_norm_R;
+            g_att_status.mag_norm_L = mag_norm_L;
+            g_att_status.mag_norm_R = mag_norm_R;
+            g_att_status.gyr_diff_x = gyr_diff_x;
+            (void)mcn_publish(MCN_HUB(dual_imu_att_status), &g_att_status);
+#endif
 
             (void)mcn_publish(MCN_HUB(dual_imu_att), &g_att_out);
         }

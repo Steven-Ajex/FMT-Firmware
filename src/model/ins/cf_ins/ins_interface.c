@@ -30,6 +30,15 @@
 
 #define BIT(u, n) (u & (1 << n))
 
+#ifdef INS_USE_DUAL_IMU_ATT
+#ifndef DUAL_IMU_DATA_TIMEOUT_MS
+#define DUAL_IMU_DATA_TIMEOUT_MS 10
+#endif
+#ifndef DUAL_IMU_STATUS_TIMEOUT_MS
+#define DUAL_IMU_STATUS_TIMEOUT_MS 50
+#endif
+#endif
+
 /* INS input bus */
 MCN_DECLARE(sensor_imu0);
 MCN_DECLARE(sensor_mag0);
@@ -40,6 +49,9 @@ MCN_DECLARE(sensor_optflow);
 MCN_DECLARE(sensor_airspeed);
 #ifdef INS_USE_DUAL_IMU_ATT
 MCN_DECLARE(dual_imu_att);
+#if DUAL_IMU_ATT_STATUS_ENABLE
+MCN_DECLARE(dual_imu_att_status);
+#endif
 #endif
 
 /* External Position */
@@ -236,8 +248,14 @@ static struct INS_Handler {
     McnNode_t ext_pos_sub_node_t;
 #ifdef INS_USE_DUAL_IMU_ATT
     McnNode_t dual_imu_sub_node_t;
+#if DUAL_IMU_ATT_STATUS_ENABLE
+    McnNode_t dual_imu_status_sub_node_t;
+    dual_imu_att_status_t dual_imu_status;
+#endif
     uint8_t dual_imu_ready;
     dual_imu_att_output_t dual_imu_report;
+    uint32_t dual_imu_last_update_ms;
+    uint32_t dual_imu_last_status_ms;
 #endif
 
     imu_data_t imu_report;
@@ -393,15 +411,38 @@ void ins_interface_step(uint32_t timestamp)
 
 #ifdef INS_USE_DUAL_IMU_ATT
     bool dual_imu_updated = false;
+    bool dual_imu_active = false;
 
     if (ins_handle.dual_imu_sub_node_t && mcn_poll(ins_handle.dual_imu_sub_node_t)) {
         if (mcn_copy(MCN_HUB(dual_imu_att), ins_handle.dual_imu_sub_node_t, &ins_handle.dual_imu_report) == FMT_EOK) {
             ins_handle.dual_imu_ready = 1;
             dual_imu_updated = true;
+            ins_handle.dual_imu_last_update_ms = timestamp;
         }
     }
 
+#if DUAL_IMU_ATT_STATUS_ENABLE
+    if (ins_handle.dual_imu_status_sub_node_t && mcn_poll(ins_handle.dual_imu_status_sub_node_t)) {
+        if (mcn_copy(MCN_HUB(dual_imu_att_status), ins_handle.dual_imu_status_sub_node_t, &ins_handle.dual_imu_status) == FMT_EOK) {
+            ins_handle.dual_imu_last_status_ms = timestamp;
+        }
+    }
+
+#endif
+
     if (ins_handle.dual_imu_ready) {
+        bool data_fresh = (timestamp - ins_handle.dual_imu_last_update_ms) <= DUAL_IMU_DATA_TIMEOUT_MS;
+        bool status_ok = true;
+#if DUAL_IMU_ATT_STATUS_ENABLE
+        bool status_fresh = (timestamp - ins_handle.dual_imu_last_status_ms) <= DUAL_IMU_STATUS_TIMEOUT_MS;
+        if (status_fresh) {
+            status_ok = (ins_handle.dual_imu_status.flags & DUAL_IMU_STATUS_VALID) != 0;
+        }
+#endif
+        dual_imu_active = data_fresh && status_ok;
+    }
+
+    if (dual_imu_active) {
         const dual_imu_att_output_t* dual_att = &ins_handle.dual_imu_report;
 
         INS_U.Hinge_angle_g.timestamp = dual_att->timestamp_ms;
@@ -430,7 +471,7 @@ void ins_interface_step(uint32_t timestamp)
     /* get sensor data */
     if (
 #ifdef INS_USE_DUAL_IMU_ATT
-        !ins_handle.dual_imu_ready &&
+        !dual_imu_active &&
 #endif
         mcn_poll(ins_handle.imu_sub_node_t)) {
         mcn_copy(MCN_HUB(sensor_imu0), ins_handle.imu_sub_node_t, &ins_handle.imu_report);
@@ -449,7 +490,7 @@ void ins_interface_step(uint32_t timestamp)
 
     if (
 #ifdef INS_USE_DUAL_IMU_ATT
-        !ins_handle.dual_imu_ready &&
+        !dual_imu_active &&
 #endif
         mcn_poll(ins_handle.mag_sub_node_t)) {
         mcn_copy(MCN_HUB(sensor_mag0), ins_handle.mag_sub_node_t, &ins_handle.mag_report);
@@ -550,7 +591,7 @@ void ins_interface_step(uint32_t timestamp)
     /* record INS input bus data if updated */
     if (imu_data_updated) {
         imu_data_updated = 0;
-        /* Log IMU data if IMU updated */
+        /* Log IMU data if IMU updated */ 
         mlog_push_msg((uint8_t*)&INS_U.IMU, IMU_ID, sizeof(INS_U.IMU));
     }
 
@@ -622,6 +663,12 @@ void ins_interface_init(void)
     ins_handle.ext_pos_sub_node_t = mcn_subscribe(MCN_HUB(external_pos), NULL);
 #ifdef INS_USE_DUAL_IMU_ATT
     ins_handle.dual_imu_sub_node_t = mcn_subscribe(MCN_HUB(dual_imu_att), NULL);
+#if DUAL_IMU_ATT_STATUS_ENABLE
+    ins_handle.dual_imu_status_sub_node_t = mcn_subscribe(MCN_HUB(dual_imu_att_status), NULL);
+#endif
+    ins_handle.dual_imu_ready = 0;
+    ins_handle.dual_imu_last_update_ms = 0;
+    ins_handle.dual_imu_last_status_ms = 0;
 #endif
 
     IMU_ID = mlog_get_bus_id("IMU");
