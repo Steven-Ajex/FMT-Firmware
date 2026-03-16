@@ -1,11 +1,15 @@
 /*
+ * Academic License - for use in teaching, academic research, and meeting
+ * course requirements at degree granting institutions only.  Not for
+ * government, commercial, or other organizational use.
+ *
  * File: Controller.c
  *
  * Code generated for Simulink model 'Controller'.
  *
- * Model version                  : 1.1085
+ * Model version                  : 1.1091
  * Simulink Coder version         : 9.0 (R2018b) 24-May-2018
- * C/C++ source code generated on : Sun Jan 18 13:24:58 2026
+ * C/C++ source code generated on : Sun Jan 18 18:52:47 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: ARM Compatible->ARM Cortex
@@ -36,29 +40,29 @@ real32_T w_est_C_mPs;                  /* '<S113>/Signal Copy1' */
 struct_oqmoiGpNYV6eEvDoym9FPF CONTROL_PARAM = {
   1.4F,
   0.2F,
-  0.2F,
-  0.6F,
-  0.1F,
+  0.05F,
+  0.5F,
+  0.12F,
   0.0F,
   -1.0F,
   1.0F,
   -1.0F,
   1.0F,
-  -0.15F,
-  0.15F,
+  -0.2F,
+  0.2F,
   -0.1F,
   0.1F,
-  5.0F,
-  5.0F,
-  0.52359879F,
-  0.1F,
-  0.1F,
+  7.0F,
+  7.0F,
+  0.523599F,
+  0.045F,
+  0.045F,
   0.15F,
-  0.1F,
-  0.1F,
-  0.2F,
-  0.003F,
-  0.003F,
+  0.0F,
+  0.0F,
+  0.0F,
+  0.0015F,
+  0.0015F,
   0.001F,
   0.0F,
   0.0F,
@@ -66,8 +70,8 @@ struct_oqmoiGpNYV6eEvDoym9FPF CONTROL_PARAM = {
   0.1F,
   -0.1F,
   0.1F,
-  1.57079637F,
-  3.14159274F,
+  1.57079601F,
+  3.14159298F,
   0.5F
 } ;                                    /* Variable: CONTROL_PARAM
                                         * Referenced by:
@@ -2628,7 +2632,6 @@ void Controller_step(void)
     real32_T Mx_max_e;
     real32_T My_max_e;
     real32_T Mz_max_e;
-    real32_T T_max_e;
     real32_T M_e[32];
     real32_T s_e;
     real32_T fro2_e;
@@ -2650,22 +2653,22 @@ void Controller_step(void)
     s_e = arm_cos_f32(Controller_U.INS_Out.hinge_angle);
     B4_tmp_o = -((0.2904F * s_e - 0.0769F * Mx_max_e) * s_e + (0.2904F *
       Mx_max_e + 0.0769F * s_e) * Mx_max_e);
-    B4_e[1] = 0.3226F * s_e + 0.05F * Mx_max_e;
-    B4_e[2] = 0.3226F * Mx_max_e + 0.05F * -s_e;
+    B4_e[1] = 0.3226F * s_e + -0.05F * Mx_max_e;
+    B4_e[2] = 0.3226F * Mx_max_e + -0.05F * -s_e;
     st_tmp_e = arm_sin_f32(-Controller_U.INS_Out.hinge_angle);
     theta_tmp_e = arm_cos_f32(-Controller_U.INS_Out.hinge_angle);
     B4_tmp_e = -((-0.2904F * theta_tmp_e - 0.0769F * st_tmp_e) * theta_tmp_e + (
       -0.2904F * st_tmp_e + 0.0769F * theta_tmp_e) * st_tmp_e);
-    B4_e[5] = -0.3226F * theta_tmp_e + 0.05F * st_tmp_e;
-    B4_e[6] = -0.3226F * st_tmp_e + 0.05F * -theta_tmp_e;
+    B4_e[5] = -0.3226F * theta_tmp_e + -0.05F * st_tmp_e;
+    B4_e[6] = -0.3226F * st_tmp_e + -0.05F * -theta_tmp_e;
     fro2_e = -((-0.2904F * theta_tmp_e - 0.0769F * st_tmp_e) * theta_tmp_e +
                (-0.2904F * st_tmp_e + 0.0769F * theta_tmp_e) * st_tmp_e);
-    B4_e[9] = 0.3226F * theta_tmp_e + -0.05F * st_tmp_e;
-    B4_e[10] = 0.3226F * st_tmp_e + -0.05F * -theta_tmp_e;
+    B4_e[9] = 0.3226F * theta_tmp_e + 0.05F * st_tmp_e;
+    B4_e[10] = 0.3226F * st_tmp_e + 0.05F * -theta_tmp_e;
     st_tmp_e = -((0.2904F * s_e - 0.0769F * Mx_max_e) * s_e + (0.2904F *
       Mx_max_e + 0.0769F * s_e) * Mx_max_e);
-    B4_e[13] = -0.3226F * s_e + -0.05F * Mx_max_e;
-    B4_e[14] = -0.3226F * Mx_max_e + -0.05F * -s_e;
+    B4_e[13] = -0.3226F * s_e + 0.05F * Mx_max_e;
+    B4_e[14] = -0.3226F * Mx_max_e + 0.05F * -s_e;
     rx_e[0] = fabsf(B4_tmp_o);
     rx_e[1] = fabsf(B4_tmp_e);
     rx_e[2] = fabsf(fro2_e);
@@ -2681,11 +2684,6 @@ void Controller_step(void)
     rx_e[2] = fabsf(B4_e[10]);
     rx_e[3] = fabsf(B4_e[14]);
     Mz_max_e = Controller_sum(rx_e);
-    rx_e[0] = s_e;
-    rx_e[1] = theta_tmp_e;
-    rx_e[2] = theta_tmp_e;
-    rx_e[3] = s_e;
-    T_max_e = Controller_sum(rx_e);
     if (Mx_max_e < 1.0E-6F) {
       Mx_max_e = 1.0F;
     }
@@ -2698,27 +2696,23 @@ void Controller_step(void)
       Mz_max_e = 1.0F;
     }
 
-    if (T_max_e < 1.0E-6F) {
-      T_max_e = 1.0F;
-    }
-
     memset(&rtb_B4x8[0], 0, sizeof(real32_T) << 5U);
     rtb_B4x8[0] = B4_tmp_o / Mx_max_e;
     rtb_B4x8[1] = B4_e[1] / My_max_e;
     rtb_B4x8[2] = B4_e[2] / Mz_max_e;
-    rtb_B4x8[3] = s_e / T_max_e;
+    rtb_B4x8[3] = s_e / 4.0F;
     rtb_B4x8[4] = B4_tmp_e / Mx_max_e;
     rtb_B4x8[5] = B4_e[5] / My_max_e;
     rtb_B4x8[6] = B4_e[6] / Mz_max_e;
-    rtb_B4x8[7] = theta_tmp_e / T_max_e;
+    rtb_B4x8[7] = theta_tmp_e / 4.0F;
     rtb_B4x8[8] = fro2_e / Mx_max_e;
     rtb_B4x8[9] = B4_e[9] / My_max_e;
     rtb_B4x8[10] = B4_e[10] / Mz_max_e;
-    rtb_B4x8[11] = theta_tmp_e / T_max_e;
+    rtb_B4x8[11] = theta_tmp_e / 4.0F;
     rtb_B4x8[12] = st_tmp_e / Mx_max_e;
     rtb_B4x8[13] = B4_e[13] / My_max_e;
     rtb_B4x8[14] = B4_e[14] / Mz_max_e;
-    rtb_B4x8[15] = s_e / T_max_e;
+    rtb_B4x8[15] = s_e / 4.0F;
 
     /* End of MATLAB Function: '<S14>/MATLAB Function1' */
 

@@ -34,6 +34,7 @@
 #include "driver/mag/ist8310.h"
 #include "driver/mtd/ramtron.h"
 #include "driver/rgb_led/ncp5623c.h"
+#include "driver/vision_flow/hflow_can.h"
 #include "driver/vision_flow/mtf_01.h"
 #include "drv_adc.h"
 #include "drv_can.h"
@@ -441,6 +442,7 @@ void bsp_initialize(void)
         RT_CHECK(drv_ist8310_init("i2c3_dev1", "mag0", 0));
     }
     RT_CHECK(drv_mtf_01_init("serial4"));
+    RT_CHECK(drv_hflow_can_init("can1"));
     RT_CHECK(gps_ubx_init("serial3", "gps"));
 
     /* register sensor to sensor hub */

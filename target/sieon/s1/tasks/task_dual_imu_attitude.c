@@ -120,17 +120,11 @@ static int echo_dual_imu_att(void* param)
         return -1;
     }
 
-    console_printf("ts:%u theta:%.4f accL:[%.3f %.3f %.3f] accR:[%.3f %.3f %.3f] accCG:[%.3f %.3f %.3f] gyrL:[%.3f %.3f %.3f] gyrR:[%.3f %.3f %.3f] gyr:[%.3f %.3f %.3f] magL:[%.3f %.3f %.3f] magR:[%.3f %.3f %.3f] magCG:[%.3f %.3f %.3f]\n",
+    console_printf("ts:%u theta:%.4f gyr:[%.3f %.3f %.3f] accCG:[%.3f %.3f %.3f] magCG:[%.3f %.3f %.3f]\n",
                    data.timestamp_ms,
                    data.hinge_theta,
-                   data.acc_b_L[0], data.acc_b_L[1], data.acc_b_L[2],
-                   data.acc_b_R[0], data.acc_b_R[1], data.acc_b_R[2],
-                   data.acc_b_cg[0], data.acc_b_cg[1], data.acc_b_cg[2],
-                   data.gyr_b_L[0], data.gyr_b_L[1], data.gyr_b_L[2],
-                   data.gyr_b_R[0], data.gyr_b_R[1], data.gyr_b_R[2],
                    data.gyr_b[0], data.gyr_b[1], data.gyr_b[2],
-                   data.mag_b_L[0], data.mag_b_L[1], data.mag_b_L[2],
-                   data.mag_b_R[0], data.mag_b_R[1], data.mag_b_R[2],
+                   data.acc_b_cg[0], data.acc_b_cg[1], data.acc_b_cg[2],
                    data.mag_b_cg[0], data.mag_b_cg[1], data.mag_b_cg[2]);
     return 0;
 }
@@ -471,12 +465,6 @@ static void att_compute_body_vectors(float dt,
     if (out) {
         out->timestamp_ms = imuL->timestamp_ms;
         out->hinge_theta = theta;
-        memcpy(out->acc_b_L, acc_b_L, sizeof(acc_b_L));
-        memcpy(out->acc_b_R, acc_b_R, sizeof(acc_b_R));
-        memcpy(out->mag_b_L, mag_b_L, sizeof(mag_b_L));
-        memcpy(out->mag_b_R, mag_b_R, sizeof(mag_b_R));
-        memcpy(out->gyr_b_L, gyr_b_L, sizeof(gyr_b_L));
-        memcpy(out->gyr_b_R, gyr_b_R, sizeof(gyr_b_R));
         memcpy(out->gyr_b, gyr_b_avg, sizeof(gyr_b_avg));
         memcpy(out->acc_b_cg, acc_b_cg, sizeof(acc_b_cg));
         memcpy(out->mag_b_cg, mag_b_cg, sizeof(mag_b_cg));

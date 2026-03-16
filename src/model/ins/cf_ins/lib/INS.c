@@ -1,11 +1,15 @@
 /*
+ * Academic License - for use in teaching, academic research, and meeting
+ * course requirements at degree granting institutions only.  Not for
+ * government, commercial, or other organizational use.
+ *
  * File: INS.c
  *
  * Code generated for Simulink model 'INS'.
  *
  * Model version                  : 1.4386
  * Simulink Coder version         : 9.0 (R2018b) 24-May-2018
- * C/C++ source code generated on : Sun Jan 18 13:11:23 2026
+ * C/C++ source code generated on : Sun Jan 18 16:45:38 2026
  *
  * Target selection: ert.tlc
  * Embedded hardware selection: ARM Compatible->ARM Cortex
@@ -105,14 +109,14 @@ struct_MsHaBgmXpzpEo1zn25Qdc INS_PARAM = {
   0.3F,
   0U,
   0.25F,
-  2.5F,
+  3.0F,
   0.4F,
   4.5F,
   0.25F,
   1.0F,
   1.0F,
-  0.02F,
-  0.01F,
+  0.05F,
+  0.0F,
   2.0F,
   1.0F,
   100U,
@@ -120,26 +124,26 @@ struct_MsHaBgmXpzpEo1zn25Qdc INS_PARAM = {
   0.0F,
   0.0F,
   0.0F,
-  2.0F,
-  2.0F,
-  0.0F,
-  0.0F,
+  0.4F,
+  0.2F,
+  1.5F,
+  0.5F,
   2.0F,
   1.0F,
-  5U,
+  10U,
   0.0F,
   2.0F,
   1.0F,
   0.2F,
   10U,
-  2.0F,
-  1.0F,
-  0.2F,
-  5U,
+  3.0F,
   5.0F,
-  2.0F,
   0.2F,
-  50U,
+  10U,
+  2.0F,
+  1.5F,
+  0.1F,
+  20U,
   3U,
   0.0F
 } ;                                    /* Variable: INS_PARAM
@@ -733,7 +737,7 @@ Parameters_INS_T INS_P = {
   0.0F,
   0.0F,
   0.0F,
-  -1.0F,
+  1.0F,
   2.0F,
   1.0F,
   -1.0F,

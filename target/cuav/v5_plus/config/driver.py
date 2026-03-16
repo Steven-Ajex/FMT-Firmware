@@ -9,6 +9,7 @@ DRIVERS = [
     'rgb_led/ncp5623c.c',
     'mtd/ramtron.c',
     'vision_flow/mtf_01.c',
+    'vision_flow/hflow_can.c',
     'airspeed/ms4525.c',
 ]
 

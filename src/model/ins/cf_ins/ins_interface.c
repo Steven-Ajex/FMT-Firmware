@@ -237,6 +237,39 @@ mlog_elem_t INS_Out_Elems[] = {
 };
 MLOG_BUS_DEFINE(INS_Out, INS_Out_Elems);
 
+typedef struct __attribute__((packed, aligned(4))) {
+    uint32_t timestamp;
+    float phi;
+    float theta;
+    float psi;
+    float quat[4];
+    float p;
+    float q;
+    float r;
+    float ax;
+    float ay;
+    float az;
+    float vn;
+    float ve;
+    float vd;
+    float airspeed;
+    double lat;
+    double lon;
+    double alt;
+    double lat_0;
+    double lon_0;
+    double alt_0;
+    double dx_dlat;
+    double dy_dlon;
+    float x_R;
+    float y_R;
+    float h_R;
+    float h_AGL;
+    uint32_t flag;
+    uint32_t status;
+    float hinge_angle;
+} ins_out_mlog_t;
+
 static struct INS_Handler {
     McnNode_t imu_sub_node_t;
     McnNode_t mag_sub_node_t;
@@ -301,6 +334,7 @@ static int ins_output_echo(void* param)
     printf("accel: %.2f %.2f %.2f\n", ins_out.ax, ins_out.ay, ins_out.az);
     printf("vel: %.2f %.2f %.2f airspeed:%.2f\n", ins_out.vn, ins_out.ve, ins_out.vd, ins_out.airspeed);
     printf("xyh: %.2f %.2f %.2f, h_AGL: %.2f\n", ins_out.x_R, ins_out.y_R, ins_out.h_R, ins_out.h_AGL);
+    printf("hinge_angle: %.2f\n", ins_out.hinge_angle);
     printf("LLA: %lf %lf %f LLA0: %lf %lf %f\n", ins_out.lat, ins_out.lon, ins_out.alt, ins_out.lat_0, ins_out.lon_0, ins_out.alt_0);
     printf("dx/dlat: %lf dy/dlon: %lf\n", ins_out.dx_dlat, ins_out.dy_dlon);
     printf("standstill:%d att:%d heading:%d vel:%d LLA:%d xy:%d h:%d h_AGL:%d\n",
@@ -432,14 +466,7 @@ void ins_interface_step(uint32_t timestamp)
 
     if (ins_handle.dual_imu_ready) {
         bool data_fresh = (timestamp - ins_handle.dual_imu_last_update_ms) <= DUAL_IMU_DATA_TIMEOUT_MS;
-        bool status_ok = true;
-#if DUAL_IMU_ATT_STATUS_ENABLE
-        bool status_fresh = (timestamp - ins_handle.dual_imu_last_status_ms) <= DUAL_IMU_STATUS_TIMEOUT_MS;
-        if (status_fresh) {
-            status_ok = (ins_handle.dual_imu_status.flags & DUAL_IMU_STATUS_VALID) != 0;
-        }
-#endif
-        dual_imu_active = data_fresh && status_ok;
+        dual_imu_active = data_fresh;
     }
 
     if (dual_imu_active) {
@@ -641,7 +668,40 @@ void ins_interface_step(uint32_t timestamp)
     DEFINE_TIMETAG(ins_output, 100);
     if (check_timetag(TIMETAG(ins_output))) {
         /* Log INS out data */
-        mlog_push_msg((uint8_t*)&INS_Y.INS_Out, INS_Out_ID, sizeof(INS_Y.INS_Out));
+        ins_out_mlog_t ins_out_log;
+
+        ins_out_log.timestamp = INS_Y.INS_Out.timestamp;
+        ins_out_log.phi = INS_Y.INS_Out.phi;
+        ins_out_log.theta = INS_Y.INS_Out.theta;
+        ins_out_log.psi = INS_Y.INS_Out.psi;
+        memcpy(ins_out_log.quat, INS_Y.INS_Out.quat, sizeof(ins_out_log.quat));
+        ins_out_log.p = INS_Y.INS_Out.p;
+        ins_out_log.q = INS_Y.INS_Out.q;
+        ins_out_log.r = INS_Y.INS_Out.r;
+        ins_out_log.ax = INS_Y.INS_Out.ax;
+        ins_out_log.ay = INS_Y.INS_Out.ay;
+        ins_out_log.az = INS_Y.INS_Out.az;
+        ins_out_log.vn = INS_Y.INS_Out.vn;
+        ins_out_log.ve = INS_Y.INS_Out.ve;
+        ins_out_log.vd = INS_Y.INS_Out.vd;
+        ins_out_log.airspeed = INS_Y.INS_Out.airspeed;
+        ins_out_log.lat = INS_Y.INS_Out.lat;
+        ins_out_log.lon = INS_Y.INS_Out.lon;
+        ins_out_log.alt = INS_Y.INS_Out.alt;
+        ins_out_log.lat_0 = INS_Y.INS_Out.lat_0;
+        ins_out_log.lon_0 = INS_Y.INS_Out.lon_0;
+        ins_out_log.alt_0 = INS_Y.INS_Out.alt_0;
+        ins_out_log.dx_dlat = INS_Y.INS_Out.dx_dlat;
+        ins_out_log.dy_dlon = INS_Y.INS_Out.dy_dlon;
+        ins_out_log.x_R = INS_Y.INS_Out.x_R;
+        ins_out_log.y_R = INS_Y.INS_Out.y_R;
+        ins_out_log.h_R = INS_Y.INS_Out.h_R;
+        ins_out_log.h_AGL = INS_Y.INS_Out.h_AGL;
+        ins_out_log.flag = INS_Y.INS_Out.flag;
+        ins_out_log.status = INS_Y.INS_Out.status;
+        ins_out_log.hinge_angle = INS_Y.INS_Out.hinge_angle;
+
+        mlog_push_msg((uint8_t*)&ins_out_log, INS_Out_ID, sizeof(ins_out_log));
     }
 }
 

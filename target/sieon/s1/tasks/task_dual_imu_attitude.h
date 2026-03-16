@@ -31,12 +31,6 @@ extern "C" {
 typedef struct {
     uint32_t timestamp_ms;
     float hinge_theta;
-    float acc_b_L[3];
-    float acc_b_R[3];
-    float mag_b_L[3];
-    float mag_b_R[3];
-    float gyr_b_L[3];
-    float gyr_b_R[3];
     float gyr_b[3];
     float acc_b_cg[3];
     float mag_b_cg[3];
