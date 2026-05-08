@@ -35,7 +35,7 @@ int ekf_update_extpos(void)
     int n_ok = 0;
 
     if (fv & EXTPOS_BIT_XY) {
-        /* x */
+        ekf_set_innov_tag("ext_x");
         for (int i = 0; i < N; i++) H[i] = 0.0f;
         H[EKF_X_PN] = 1.0f;
         if (ekf_update_scalar(H,
@@ -43,7 +43,7 @@ int ekf_update_extpos(void)
                               R_meas, 0.0f, dx)) {
             ekf_inject_error(dx); n_ok++;
         }
-        /* y */
+        ekf_set_innov_tag("ext_y");
         for (int i = 0; i < N; i++) H[i] = 0.0f;
         H[EKF_X_PE] = 1.0f;
         if (ekf_update_scalar(H,
@@ -54,6 +54,7 @@ int ekf_update_extpos(void)
     }
 
     if (fv & EXTPOS_BIT_Z) {
+        ekf_set_innov_tag("ext_z");
         for (int i = 0; i < N; i++) H[i] = 0.0f;
         H[EKF_X_PD] = 1.0f;
         if (ekf_update_scalar(H,
@@ -91,7 +92,7 @@ int ekf_update_extatt(void)
     quat_to_euler(ekf.q, &phi, &theta, &psi);
 
     if (fv & EXTPOS_BIT_RP) {
-        /* roll */
+        ekf_set_innov_tag("ext_phi");
         for (int i = 0; i < N; i++) H[i] = 0.0f;
         H[EKF_X_DTHX] = 1.0f;
         if (ekf_update_scalar(H,
@@ -99,7 +100,7 @@ int ekf_update_extatt(void)
                               R_meas, 0.0f, dx)) {
             ekf_inject_error(dx); n_ok++;
         }
-        /* pitch */
+        ekf_set_innov_tag("ext_theta");
         for (int i = 0; i < N; i++) H[i] = 0.0f;
         H[EKF_X_DTHY] = 1.0f;
         if (ekf_update_scalar(H,
@@ -127,6 +128,7 @@ int ekf_update_extatt(void)
         }
         if (INS_PARAM.EKF_EXTPOS_PSI_MODE == 1U
          || INS_PARAM.EKF_EXTPOS_PSI_MODE == 2U) {
+            ekf_set_innov_tag("ext_psi");
             for (int i = 0; i < N; i++) H[i] = 0.0f;
             H[EKF_X_DTHZ] = 1.0f;
             if (ekf_update_scalar(H,

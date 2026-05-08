@@ -47,6 +47,7 @@ int ekf_update_optflow(void)
     real32_T dx[N];
     int n_ok = 0;
 
+    ekf_set_innov_tag("opf_x");
     /* x */
     for (int i = 0; i < N; i++) H[i] = 0.0f;
     H[EKF_X_VN] = R[0];
@@ -56,6 +57,7 @@ int ekf_update_optflow(void)
         ekf_inject_error(dx); n_ok++;
     }
 
+    ekf_set_innov_tag("opf_y");
     /* y -- recompute R since q may have changed */
     quat_to_dcm(ekf.q, R);
     h_vy = R[1] * ekf.v_NED[0] + R[4] * ekf.v_NED[1] + R[7] * ekf.v_NED[2];

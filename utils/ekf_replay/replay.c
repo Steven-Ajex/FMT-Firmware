@@ -27,6 +27,7 @@
 #include "ekf_state.h"
 #include "ekf_health.h"
 #include "ekf_extpos.h"
+#include "ekf_core.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -256,6 +257,24 @@ static void bus_advance(bus_t* b) {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Innovation logger                                                  */
+/*                                                                     */
+/*  Writes one row per scalar measurement update.  NIS = innov^2 / S   */
+/*  is precomputed for convenience: under correct R the channel-wise   */
+/*  NIS distribution should be chi-square(1) (mean 1, 95th pct ~3.84). */
+/* ------------------------------------------------------------------ */
+static FILE* innov_fp = NULL;
+
+static void innov_cb(const char* tag, real32_T innov, real32_T R,
+                     real32_T S, int accepted, uint32_T ts)
+{
+    if (innov_fp == NULL) return;
+    real32_T nis = (S > 0.0f) ? (innov * innov / S) : 0.0f;
+    fprintf(innov_fp, "%u,%s,%.6f,%.6f,%.6f,%.6f,%d\n",
+            ts, tag, innov, R, S, nis, accepted);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Output writer                                                      */
 /* ------------------------------------------------------------------ */
 static FILE* out_fp = NULL;
@@ -375,14 +394,15 @@ static int selftest(void) {
 /* ------------------------------------------------------------------ */
 /*  Argument parsing                                                   */
 /* ------------------------------------------------------------------ */
-static const char* opt_imu  = NULL;
-static const char* opt_mag  = NULL;
-static const char* opt_baro = NULL;
-static const char* opt_gps  = NULL;
-static const char* opt_rf   = NULL;
-static const char* opt_opf  = NULL;
-static const char* opt_ext  = NULL;
-static const char* opt_out  = "INS_Out_replay.csv";
+static const char* opt_imu      = NULL;
+static const char* opt_mag      = NULL;
+static const char* opt_baro     = NULL;
+static const char* opt_gps      = NULL;
+static const char* opt_rf       = NULL;
+static const char* opt_opf      = NULL;
+static const char* opt_ext      = NULL;
+static const char* opt_out      = "INS_Out_replay.csv";
+static const char* opt_innov    = NULL;
 static int         opt_selftest = 0;
 
 static void usage(const char* argv0) {
@@ -392,7 +412,8 @@ static void usage(const char* argv0) {
         "         [--baro Barometer.csv] [--gps GPS_uBlox.csv]\n"
         "         [--rf Rangefinder.csv] [--opf OpticalFlow.csv]\n"
         "         [--ext External_Pos.csv]\n"
-        "         [--out INS_Out_replay.csv]\n",
+        "         [--out INS_Out_replay.csv]\n"
+        "         [--innov-csv innov.csv]\n",
         argv0, argv0);
 }
 
@@ -408,6 +429,7 @@ int main(int argc, char** argv) {
         else if (strcmp(a, "--opf")  == 0 && i+1 < argc) opt_opf  = argv[++i];
         else if (strcmp(a, "--ext")  == 0 && i+1 < argc) opt_ext  = argv[++i];
         else if (strcmp(a, "--out")  == 0 && i+1 < argc) opt_out  = argv[++i];
+        else if (strcmp(a, "--innov-csv") == 0 && i+1 < argc) opt_innov = argv[++i];
         else if (strcmp(a, "-h") == 0 || strcmp(a, "--help") == 0) {
             usage(argv[0]); return 0;
         } else {
@@ -430,9 +452,20 @@ int main(int argc, char** argv) {
     if (opt_opf  && bus_open(&b_opf,  opt_opf ) != 0) return 1;
     if (opt_ext  && bus_open(&b_ext,  opt_ext ) != 0) return 1;
 
+    if (opt_innov != NULL) {
+        innov_fp = fopen(opt_innov, "w");
+        if (innov_fp == NULL) {
+            fprintf(stderr, "ekf_replay: cannot open %s for write\n", opt_innov);
+            return 1;
+        }
+        fprintf(innov_fp, "timestamp,tag,innov,R,S,nis,accepted\n");
+        ekf_set_innov_cb(innov_cb);
+    }
+
     out_open(opt_out);
     replay_run();
     out_close();
+    if (innov_fp) { fclose(innov_fp); innov_fp = NULL; }
 
     csv_close(&b_imu.r);
     csv_close(&b_mag.r);

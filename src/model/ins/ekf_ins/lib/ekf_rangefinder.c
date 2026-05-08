@@ -55,6 +55,7 @@ int ekf_update_rangefinder(void)
 
     real32_T R_meas = INS_PARAM.EKF_RF_NSE * INS_PARAM.EKF_RF_NSE;
     real32_T dx[N];
+    ekf_set_innov_tag("rf");
     if (ekf_update_scalar(H, innov, R_meas, INS_PARAM.EKF_RF_GATE, dx)) {
         ekf_inject_error(dx);
         return 1;

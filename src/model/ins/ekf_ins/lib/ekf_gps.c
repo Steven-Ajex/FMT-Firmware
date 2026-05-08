@@ -78,6 +78,7 @@ int ekf_update_gps_pos(void)
     real32_T dx[N];
     int n_ok = 0;
 
+    ekf_set_innov_tag("gps_pos_n");
     /* ---- x (north) ---- */
     for (int i = 0; i < N; i++) H[i] = 0.0f;
     H[EKF_X_PN] = 1.0f;
@@ -85,6 +86,7 @@ int ekf_update_gps_pos(void)
         ekf_inject_error(dx); n_ok++;
     }
 
+    ekf_set_innov_tag("gps_pos_e");
     /* ---- y (east) ---- */
     for (int i = 0; i < N; i++) H[i] = 0.0f;
     H[EKF_X_PE] = 1.0f;
@@ -94,6 +96,7 @@ int ekf_update_gps_pos(void)
 
     /* ---- z (down): only if GPS is the active height source ---- */
     if (INS_PARAM.EKF_HGT_MODE == EKF_HGT_SRC_GPS) {
+        ekf_set_innov_tag("gps_pos_d");
         for (int i = 0; i < N; i++) H[i] = 0.0f;
         H[EKF_X_PD] = 1.0f;
         if (ekf_update_scalar(H, z[2] - ekf.p_NED[2], R_v, INS_PARAM.EKF_GPS_GATE, dx)) {
@@ -145,7 +148,9 @@ int ekf_update_gps_vel(void)
     real32_T H[N];
     real32_T dx[N];
     int n_ok = 0;
+    static const char* VEL_TAG[3] = { "gps_vel_n", "gps_vel_e", "gps_vel_d" };
     for (int axis = 0; axis < 3; axis++) {
+        ekf_set_innov_tag(VEL_TAG[axis]);
         for (int i = 0; i < N; i++) H[i] = 0.0f;
         H[EKF_X_VN + axis] = 1.0f;
         if (ekf_update_scalar(H, innov[axis], R, INS_PARAM.EKF_GPS_GATE, dx)) {

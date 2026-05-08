@@ -16,6 +16,13 @@
 static real32_T s_F[N * N];
 static real32_T s_T[N * N];
 
+/* Innovation hook (NULL in firmware; replay binary installs a writer). */
+static ekf_innov_cb_t s_innov_cb  = NULL;
+static const char*    s_innov_tag = "?";
+
+void ekf_set_innov_cb(ekf_innov_cb_t cb) { s_innov_cb = cb; }
+void ekf_set_innov_tag(const char* tag)  { s_innov_tag = tag ? tag : "?"; }
+
 /* ------------------------------------------------------------------ */
 /*  Maintenance                                                        */
 /* ------------------------------------------------------------------ */
@@ -244,15 +251,24 @@ int ekf_update_scalar(const real32_T H[N],
     for (int k = 0; k < N; k++) S += HP[k] * H[k];
 
     if (S <= 0.0f) {
+        if (s_innov_cb) s_innov_cb(s_innov_tag, innov, R, S, 0, 0U);
         return 0;
     }
 
     /* gate */
+    int accepted = 1;
     if (gate > 0.0f) {
         if (innov * innov > gate * gate * S) {
-            return 0;
+            accepted = 0;
         }
     }
+    /* Hook fires regardless of acceptance so the analyser can see
+     * rejected samples (which are often the most diagnostic). */
+    if (s_innov_cb) {
+        extern INS_U_T INS_U;
+        s_innov_cb(s_innov_tag, innov, R, S, accepted, INS_U.IMU.timestamp);
+    }
+    if (!accepted) return 0;
 
     real32_T inv_S = 1.0f / S;
 

@@ -82,6 +82,7 @@ int ekf_update_mag_heading(void)
 {
     if (!(INS_PARAM.EKF_AID_MASK & EKF_AID_MAG)) return 0;
     if (INS_U.MAG.timestamp == 0U) return 0;
+    ekf_set_innov_tag("mag");
 
     real32_T mb[3] = { INS_U.MAG.mag_x, INS_U.MAG.mag_y, INS_U.MAG.mag_z };
     real32_T mn[3];
@@ -168,6 +169,7 @@ int ekf_update_gravity(void)
      */
     real32_T H[N];
 
+    ekf_set_innov_tag("grav_x");
     /* --- innov_x (body x component) --- */
     for (int i = 0; i < N; i++) H[i] = 0.0f;
     H[EKF_X_DTHX] = -R[3 + 0] * g;
@@ -184,6 +186,7 @@ int ekf_update_gravity(void)
         ekf_inject_error(dx); n_ok++;
     }
 
+    ekf_set_innov_tag("grav_y");
     /* --- innov_y (body y component), recompute R as q changed --- */
     quat_to_dcm(ekf.q, R);
     h_y = -R[7] * g;

@@ -68,6 +68,27 @@ void ekf_clamp_diag(real32_T floor_value);
  * sub-system). */
 void ekf_clamp_floor(void);
 
+/* ------------------------------------------------------------------ */
+/*  Innovation instrumentation hook                                    */
+/*                                                                     */
+/*  Called once per scalar measurement update with the post-gating     */
+/*  outcome.  The pointer is NULL by default so the firmware build     */
+/*  pays nothing; offline tools (utils/ekf_replay) install a callback  */
+/*  to log every innovation for diagnostic post-processing.            */
+/*                                                                     */
+/*  Tag is a free-form short string (e.g. "mag", "gps_pos_x") set      */
+/*  by each fusion module via ekf_set_innov_tag() before its updates.  */
+/* ------------------------------------------------------------------ */
+typedef void (*ekf_innov_cb_t)(const char* tag,
+                               real32_T innov,
+                               real32_T R,
+                               real32_T S,
+                               int      accepted,
+                               uint32_T timestamp);
+
+void ekf_set_innov_cb(ekf_innov_cb_t cb);
+void ekf_set_innov_tag(const char* tag);
+
 #ifdef __cplusplus
 }
 #endif

@@ -75,6 +75,7 @@ int ekf_update_baro(void)
 
     real32_T R = INS_PARAM.EKF_BARO_NSE * INS_PARAM.EKF_BARO_NSE;
     real32_T dx[N];
+    ekf_set_innov_tag("baro");
     if (ekf_update_scalar(H, innov, R, INS_PARAM.EKF_BARO_GATE, dx)) {
         ekf_inject_error(dx);
         return 1;
