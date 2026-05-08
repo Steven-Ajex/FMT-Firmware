@@ -56,6 +56,7 @@ typedef struct {
     uint32_T flag;        /* mirrors INS_Out_Bus.flag    */
     uint32_T status;      /* mirrors INS_Out_Bus.status  */
     uint8_T  init_done;
+    uint8_T  baro_seeded; /* baro_b snapped at least once after origin */
 } ekf_t;
 
 extern ekf_t ekf;

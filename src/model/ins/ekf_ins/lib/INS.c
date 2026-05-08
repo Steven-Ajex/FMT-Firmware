@@ -21,6 +21,9 @@
 #include "ekf_math.h"
 #include "ekf_core.h"
 #include "ekf_mag.h"
+#include "ekf_geo.h"
+#include "ekf_gps.h"
+#include "ekf_baro.h"
 
 INS_U_T      INS_U;
 INS_Y_T      INS_Y;
@@ -134,17 +137,49 @@ static void publish_output(void)
 
     y->airspeed = 0.0f;
 
-    /* WGS84 LLA — populated in Phase 2 once GPS is fused */
-    y->lat = y->lon = y->alt = 0.0;
-    y->lat_0 = y->lon_0 = y->alt_0 = 0.0;
-    y->dx_dlat = y->dy_dlon = 0.0;
-
-    y->status = ekf.status | 1U;        /* IMU available bit */
-    y->flag   = ekf.flag;
-    if (ekf.init_done) {
-        y->flag |= (1U << 0);            /* ready    */
-        y->flag |= (1U << 2);            /* att_valid */
+    /* WGS84 LLA — radians for lat/lon, meters for alt, m/rad for d*_d* */
+    if (ekf.origin_set) {
+        real_T   lat_rad, lon_rad, alt_m;
+        real32_T ned[3] = { ekf.p_NED[0], ekf.p_NED[1], ekf.p_NED[2] };
+        ekf_geo_ned_to_lla(ned, &lat_rad, &lon_rad, &alt_m);
+        y->lat     = lat_rad;
+        y->lon     = lon_rad;
+        y->alt     = alt_m;
+        y->lat_0   = ekf.lat0_rad;
+        y->lon_0   = ekf.lon0_rad;
+        y->alt_0   = ekf.alt0_m;
+        y->dx_dlat = ekf.dx_dlat;
+        y->dy_dlon = ekf.dy_dlon;
+    } else {
+        y->lat = y->lon = y->alt = 0.0;
+        y->lat_0 = y->lon_0 = y->alt_0 = 0.0;
+        y->dx_dlat = y->dy_dlon = 0.0;
     }
+
+    /* status bits — populated in Phase 4 with full health logic.
+     * For now reflect which sensors have produced at least one sample. */
+    uint32_T status = 1U;                                             /* imu1 */
+    if (INS_U.MAG.timestamp         != 0U) status |= (1U << 2);
+    if (INS_U.Barometer.timestamp   != 0U) status |= (1U << 3);
+    if (ekf_gps_available())               status |= (1U << 4);
+    y->status = status;
+
+    /* flag bits */
+    uint32_T flag = 0U;
+    if (ekf.init_done) {
+        flag |= (1U << 0);                                            /* ready     */
+        flag |= (1U << 2);                                            /* att_valid */
+        flag |= (1U << 3);                                            /* head_valid */
+    }
+    if (ekf.origin_set) {
+        flag |= (1U << 4);                                            /* vel_valid       */
+        flag |= (1U << 5);                                            /* WGS84_pos_valid */
+        flag |= (1U << 6);                                            /* xy_R_valid      */
+        flag |= (1U << 7);                                            /* h_R_valid       */
+    } else if (ekf.baro_seeded) {
+        flag |= (1U << 7);                                            /* h_R_valid only  */
+    }
+    y->flag = flag;
 }
 
 void INS_init(void)
@@ -173,11 +208,23 @@ void INS_step(void)
     /* ---- gravity tilt update (per-step, gated by |f| ≈ g) ---- */
     ekf_update_gravity();
 
-    /* ---- mag heading update (only when MAG bus ticks) ---- */
-    static uint32_T last_mag_ts = 0;
+    /* ---- async measurement updates: only when the bus timestamp ticks ---- */
+    static uint32_T last_mag_ts  = 0;
+    static uint32_T last_gps_ts  = 0;
+    static uint32_T last_baro_ts = 0;
+
     if (INS_U.MAG.timestamp != last_mag_ts) {
         last_mag_ts = INS_U.MAG.timestamp;
         ekf_update_mag_heading();
+    }
+    if (INS_U.GPS_uBlox.timestamp != last_gps_ts) {
+        last_gps_ts = INS_U.GPS_uBlox.timestamp;
+        ekf_update_gps_pos();
+        ekf_update_gps_vel();
+    }
+    if (INS_U.Barometer.timestamp != last_baro_ts) {
+        last_baro_ts = INS_U.Barometer.timestamp;
+        ekf_update_baro();
     }
 
     /* ---- assemble output bus ---- */
