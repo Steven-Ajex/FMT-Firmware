@@ -27,6 +27,7 @@
 #include "ekf_rangefinder.h"
 #include "ekf_optflow.h"
 #include "ekf_extpos.h"
+#include "ekf_health.h"
 
 INS_U_T      INS_U;
 INS_Y_T      INS_Y;
@@ -38,6 +39,16 @@ INS_EXPORT_T INS_EXPORT = {
 };
 
 ekf_t ekf;
+
+/* Last seen bus timestamps used to detect a fresh sample.  Kept at file
+ * scope (rather than function-local statics) so ekf_state_reset() can
+ * zero them and unit tests can reinitialise the EKF cleanly. */
+static uint32_T s_last_mag_ts;
+static uint32_T s_last_gps_ts;
+static uint32_T s_last_baro_ts;
+static uint32_T s_last_rf_ts;
+static uint32_T s_last_opf_ts;
+static uint32_T s_last_ext_ts;
 
 /* ------------------------------------------------------------------ */
 /*  Default parameter values.  Re-applied by INS_init() so the firmware*/
@@ -99,6 +110,8 @@ void ekf_state_reset(void)
     memset(&ekf, 0, sizeof(ekf));
     ekf.q[0] = 1.0f;
     ekf.dt   = (real32_T)INS_EXPORT.period * 1.0e-3f;
+    s_last_mag_ts = s_last_gps_ts = s_last_baro_ts = 0U;
+    s_last_rf_ts  = s_last_opf_ts = s_last_ext_ts  = 0U;
 }
 
 /* ------------------------------------------------------------------ */
@@ -159,29 +172,34 @@ static void publish_output(void)
         y->dx_dlat = y->dy_dlon = 0.0;
     }
 
-    /* status bits — populated in Phase 4 with full health logic.
-     * For now reflect which sensors have produced at least one sample. */
-    uint32_T status = 1U;                                             /* imu1 */
-    if (INS_U.MAG.timestamp         != 0U) status |= (1U << 2);
-    if (INS_U.Barometer.timestamp   != 0U) status |= (1U << 3);
-    if (ekf_gps_available())               status |= (1U << 4);
+    /* status bits - mirror INS_Status.bit (see ins_interface.h):
+     *   0 imu1   1 imu2   2 mag    3 baro
+     *   4 gps    5 sonar  6 optflow                                    */
+    uint32_T status = 0U;
+    if (ekf_health_available(EKF_SENS_IMU))  status |= (1U << 0);
+    if (ekf_health_available(EKF_SENS_MAG))  status |= (1U << 2);
+    if (ekf_health_available(EKF_SENS_BARO)) status |= (1U << 3);
+    if (ekf_health_available(EKF_SENS_GPS))  status |= (1U << 4);
+    if (ekf_health_available(EKF_SENS_RF))   status |= (1U << 5);
+    if (ekf_health_available(EKF_SENS_OPF))  status |= (1U << 6);
     y->status = status;
 
-    /* flag bits */
+    /* flag bits - mirror INS_Flag.bit:
+     *   0 ready          1 standstill  2 att_valid  3 head_valid
+     *   4 vel_valid      5 WGS84_pos_valid
+     *   6 xy_R_valid     7 h_R_valid   8 h_AGL_valid                   */
     uint32_T flag = 0U;
     if (ekf.init_done) {
-        flag |= (1U << 0);                                            /* ready     */
-        flag |= (1U << 2);                                            /* att_valid */
-        flag |= (1U << 3);                                            /* head_valid */
+        flag |= (1U << 0);                  /* ready     */
+        flag |= (1U << 2);                  /* att_valid */
+        flag |= (1U << 3);                  /* head_valid */
     }
-    if (ekf.origin_set) {
-        flag |= (1U << 4);                                            /* vel_valid       */
-        flag |= (1U << 5);                                            /* WGS84_pos_valid */
-        flag |= (1U << 6);                                            /* xy_R_valid      */
-        flag |= (1U << 7);                                            /* h_R_valid       */
-    } else if (ekf.baro_seeded) {
-        flag |= (1U << 7);                                            /* h_R_valid only  */
-    }
+    if (ekf_h.standstill)                       flag |= (1U << 1);
+    if (ekf.origin_set || ekf.baro_seeded)      flag |= (1U << 4);  /* vel_valid       */
+    if (ekf.origin_set)                         flag |= (1U << 5);  /* WGS84_pos_valid */
+    if (ekf.origin_set)                         flag |= (1U << 6);  /* xy_R_valid      */
+    if (ekf.origin_set || ekf.baro_seeded)      flag |= (1U << 7);  /* h_R_valid       */
+    if (ekf_health_available(EKF_SENS_RF))      flag |= (1U << 8);  /* h_AGL_valid     */
     y->flag = flag;
 }
 
@@ -189,6 +207,7 @@ void INS_init(void)
 {
     ekf_load_defaults();
     ekf_state_reset();
+    ekf_health_init();
     INS_Y.INS_Out.quat[0] = 1.0f;
 }
 
@@ -197,6 +216,10 @@ void INS_init(void)
 /* ------------------------------------------------------------------ */
 void INS_step(void)
 {
+    /* Health bookkeeping must run every step so timeouts trip even
+     * when the EKF itself is paused (e.g. during the initial align). */
+    ekf_health_update(INS_U.IMU.timestamp);
+
     if (!ekf.init_done) {
         ekf_mag_align_initial();
         publish_output();
@@ -211,39 +234,37 @@ void INS_step(void)
     /* ---- gravity tilt update (per-step, gated by |f| ≈ g) ---- */
     ekf_update_gravity();
 
-    /* ---- async measurement updates: only when the bus timestamp ticks ---- */
-    static uint32_T last_mag_ts  = 0;
-    static uint32_T last_gps_ts  = 0;
-    static uint32_T last_baro_ts = 0;
-    static uint32_T last_rf_ts   = 0;
-    static uint32_T last_opf_ts  = 0;
-    static uint32_T last_ext_ts  = 0;
-
-    if (INS_U.MAG.timestamp != last_mag_ts) {
-        last_mag_ts = INS_U.MAG.timestamp;
-        ekf_update_mag_heading();
+    /* ---- async measurement updates: only when the bus timestamp ticks
+     *      and the corresponding sensor is currently healthy. ---- */
+    if (INS_U.MAG.timestamp != s_last_mag_ts) {
+        s_last_mag_ts = INS_U.MAG.timestamp;
+        if (ekf_health_available(EKF_SENS_MAG)) ekf_update_mag_heading();
     }
-    if (INS_U.GPS_uBlox.timestamp != last_gps_ts) {
-        last_gps_ts = INS_U.GPS_uBlox.timestamp;
-        ekf_update_gps_pos();
-        ekf_update_gps_vel();
+    if (INS_U.GPS_uBlox.timestamp != s_last_gps_ts) {
+        s_last_gps_ts = INS_U.GPS_uBlox.timestamp;
+        if (ekf_health_available(EKF_SENS_GPS)) {
+            ekf_update_gps_pos();
+            ekf_update_gps_vel();
+        }
     }
-    if (INS_U.Barometer.timestamp != last_baro_ts) {
-        last_baro_ts = INS_U.Barometer.timestamp;
-        ekf_update_baro();
+    if (INS_U.Barometer.timestamp != s_last_baro_ts) {
+        s_last_baro_ts = INS_U.Barometer.timestamp;
+        if (ekf_health_available(EKF_SENS_BARO)) ekf_update_baro();
     }
-    if (INS_U.Rangefinder.timestamp != last_rf_ts) {
-        last_rf_ts = INS_U.Rangefinder.timestamp;
-        ekf_update_rangefinder();
+    if (INS_U.Rangefinder.timestamp != s_last_rf_ts) {
+        s_last_rf_ts = INS_U.Rangefinder.timestamp;
+        if (ekf_health_available(EKF_SENS_RF)) ekf_update_rangefinder();
     }
-    if (INS_U.Optical_Flow.timestamp != last_opf_ts) {
-        last_opf_ts = INS_U.Optical_Flow.timestamp;
-        ekf_update_optflow();
+    if (INS_U.Optical_Flow.timestamp != s_last_opf_ts) {
+        s_last_opf_ts = INS_U.Optical_Flow.timestamp;
+        if (ekf_health_available(EKF_SENS_OPF)) ekf_update_optflow();
     }
-    if (INS_U.External_Pos.timestamp != last_ext_ts) {
-        last_ext_ts = INS_U.External_Pos.timestamp;
-        ekf_update_extpos();
-        ekf_update_extatt();
+    if (INS_U.External_Pos.timestamp != s_last_ext_ts) {
+        s_last_ext_ts = INS_U.External_Pos.timestamp;
+        if (ekf_health_available(EKF_SENS_EXT)) {
+            ekf_update_extpos();
+            ekf_update_extatt();
+        }
     }
 
     /* ---- assemble output bus ---- */

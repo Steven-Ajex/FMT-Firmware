@@ -62,6 +62,12 @@ void ekf_inject_error(const real32_T dx[EKF_NSTATES]);
 void ekf_symmetrize(void);
 void ekf_clamp_diag(real32_T floor_value);
 
+/* Apply per-state-type lower bounds on the covariance diagonal.  Stops
+ * the EKF from collapsing into over-confident corners (the typical
+ * failure mode when several sensors fight over a tightly correlated
+ * sub-system). */
+void ekf_clamp_floor(void);
+
 #ifdef __cplusplus
 }
 #endif

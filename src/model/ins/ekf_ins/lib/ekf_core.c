@@ -39,6 +39,36 @@ void ekf_clamp_diag(real32_T floor_value)
     }
 }
 
+/* Per-state-type covariance floors.  These are sigma^2 units that
+ * roughly correspond to the noise environment the firmware cares
+ * about - they only kick in once the EKF has driven the matching
+ * diagonal below a meaningful uncertainty.
+ *
+ *   pos      sigma >= 1   cm   (var 1e-4 m^2)
+ *   vel      sigma >= 1   cm/s (var 1e-4 m^2/s^2)
+ *   dtheta   sigma >= 0.1 mrad (var 1e-8 rad^2)  - permissive, mostly to
+ *                                                  avoid exact zeros
+ *   bg       sigma >= 0.03 mrad/s
+ *   ba       sigma >= 1   mm/s^2
+ *   baro_b   sigma >= 10  cm
+ *   terr_d   sigma >= 20  cm
+ */
+void ekf_clamp_floor(void)
+{
+    static const real32_T FLOOR[EKF_NSTATES] = {
+        1.0e-4f, 1.0e-4f, 1.0e-4f,    /* pos    */
+        1.0e-4f, 1.0e-4f, 1.0e-4f,    /* vel    */
+        1.0e-8f, 1.0e-8f, 1.0e-8f,    /* dtheta */
+        1.0e-9f, 1.0e-9f, 1.0e-9f,    /* bg     */
+        1.0e-6f, 1.0e-6f, 1.0e-6f,    /* ba     */
+        1.0e-2f,                      /* baro_b */
+        4.0e-2f,                      /* terr_d */
+    };
+    for (int i = 0; i < N; i++) {
+        if (ekf.P[i * N + i] < FLOOR[i]) ekf.P[i * N + i] = FLOOR[i];
+    }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Predict                                                            */
 /*                                                                     */
@@ -185,6 +215,7 @@ void ekf_predict(const real32_T omega_meas[3],
 
     ekf_symmetrize();
     ekf_clamp_diag(1.0e-9f);
+    ekf_clamp_floor();
 }
 
 /* ------------------------------------------------------------------ */
