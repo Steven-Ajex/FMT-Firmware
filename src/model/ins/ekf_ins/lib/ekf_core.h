@@ -89,6 +89,13 @@ typedef void (*ekf_innov_cb_t)(const char* tag,
 void ekf_set_innov_cb(ekf_innov_cb_t cb);
 void ekf_set_innov_tag(const char* tag);
 
+/* Convert between the free-form tag strings used inside the EKF and a
+ * compact integer id used by the firmware mlog bus.  -1 / "?" are
+ * returned for unknown tags. */
+int         ekf_innov_tag_to_id(const char* tag);
+const char* ekf_innov_tag_from_id(int id);
+int         ekf_innov_tag_count(void);
+
 #ifdef __cplusplus
 }
 #endif

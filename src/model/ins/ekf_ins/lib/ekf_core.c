@@ -23,6 +23,49 @@ static const char*    s_innov_tag = "?";
 void ekf_set_innov_cb(ekf_innov_cb_t cb) { s_innov_cb = cb; }
 void ekf_set_innov_tag(const char* tag)  { s_innov_tag = tag ? tag : "?"; }
 
+/* Order here defines the integer id that the INS_Innov mlog bus stores.
+ * Append-only: do not insert in the middle, downstream parsers depend
+ * on these slot numbers.                                               */
+static const char* const k_innov_tags[] = {
+    "mag",          /*  0 */
+    "grav_x",       /*  1 */
+    "grav_y",       /*  2 */
+    "gps_pos_n",    /*  3 */
+    "gps_pos_e",    /*  4 */
+    "gps_pos_d",    /*  5 */
+    "gps_vel_n",    /*  6 */
+    "gps_vel_e",    /*  7 */
+    "gps_vel_d",    /*  8 */
+    "baro",         /*  9 */
+    "rf",           /* 10 */
+    "opf_x",        /* 11 */
+    "opf_y",        /* 12 */
+    "ext_x",        /* 13 */
+    "ext_y",        /* 14 */
+    "ext_z",        /* 15 */
+    "ext_phi",      /* 16 */
+    "ext_theta",    /* 17 */
+    "ext_psi",      /* 18 */
+};
+#define EKF_INNOV_TAG_COUNT ((int)(sizeof(k_innov_tags) / sizeof(k_innov_tags[0])))
+
+int ekf_innov_tag_count(void) { return EKF_INNOV_TAG_COUNT; }
+
+int ekf_innov_tag_to_id(const char* tag)
+{
+    if (tag == NULL) return -1;
+    for (int i = 0; i < EKF_INNOV_TAG_COUNT; i++) {
+        if (strcmp(k_innov_tags[i], tag) == 0) return i;
+    }
+    return -1;
+}
+
+const char* ekf_innov_tag_from_id(int id)
+{
+    if (id < 0 || id >= EKF_INNOV_TAG_COUNT) return "?";
+    return k_innov_tags[id];
+}
+
 /* ------------------------------------------------------------------ */
 /*  Maintenance                                                        */
 /* ------------------------------------------------------------------ */

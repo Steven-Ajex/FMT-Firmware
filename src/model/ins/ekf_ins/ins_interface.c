@@ -23,6 +23,9 @@
 #include "module/param/param.h"
 #include "module/sensor/sensor_hub.h"
 
+#include "ekf_core.h"
+#include "ekf_state.h"
+
 #ifdef BIT
     #undef BIT
 #endif
@@ -195,6 +198,77 @@ static mlog_elem_t External_Pos_Elems[] = {
 };
 MLOG_BUS_DEFINE(External_Pos, External_Pos_Elems);
 
+/* ------------------------------------------------------------------ */
+/*  INS_Innov - one row per scalar measurement update                   */
+/*                                                                     */
+/*  Logged for offline diagnostics.  tag_id maps to a fixed table       */
+/*  defined in ekf_core.c (use ekf_innov_tag_from_id() in tools).       */
+/*  grav_* updates fire every IMU step; they are throttled by the cb    */
+/*  to keep the SD card volume manageable.                              */
+/* ------------------------------------------------------------------ */
+typedef struct {
+    uint32_t timestamp;
+    int8_t   tag_id;
+    uint8_t  accepted;
+    uint16_t reserved;
+    float    innov;
+    float    R;
+    float    S;
+    float    nis;
+} INS_Innov_Bus;
+
+static mlog_elem_t INS_Innov_Elems[] = {
+    MLOG_ELEMENT(timestamp, MLOG_UINT32),
+    MLOG_ELEMENT(tag_id,    MLOG_INT8),
+    MLOG_ELEMENT(accepted,  MLOG_UINT8),
+    MLOG_ELEMENT(reserved,  MLOG_UINT16),
+    MLOG_ELEMENT(innov,     MLOG_FLOAT),
+    MLOG_ELEMENT(R,         MLOG_FLOAT),
+    MLOG_ELEMENT(S,         MLOG_FLOAT),
+    MLOG_ELEMENT(nis,       MLOG_FLOAT),
+};
+MLOG_BUS_DEFINE(INS_Innov, INS_Innov_Elems);
+
+/* ------------------------------------------------------------------ */
+/*  INS_State - throttled snapshot of EKF internal state                */
+/*                                                                     */
+/*  Logged at the same 10 Hz cadence as INS_Out.  Captures the bias    */
+/*  estimates and the per-block sigma so a drift / divergence is       */
+/*  immediately visible from the recorded log.                         */
+/* ------------------------------------------------------------------ */
+typedef struct {
+    uint32_t timestamp;
+    float    bg_x;     float bg_y;     float bg_z;
+    float    ba_x;     float ba_y;     float ba_z;
+    float    baro_b;
+    float    terr_d;
+    float    sigma_pos_n; float sigma_pos_e; float sigma_pos_d;
+    float    sigma_vel_n; float sigma_vel_e; float sigma_vel_d;
+    float    sigma_att_x; float sigma_att_y; float sigma_att_z;
+} INS_State_Bus;
+
+static mlog_elem_t INS_State_Elems[] = {
+    MLOG_ELEMENT(timestamp,   MLOG_UINT32),
+    MLOG_ELEMENT(bg_x,        MLOG_FLOAT),
+    MLOG_ELEMENT(bg_y,        MLOG_FLOAT),
+    MLOG_ELEMENT(bg_z,        MLOG_FLOAT),
+    MLOG_ELEMENT(ba_x,        MLOG_FLOAT),
+    MLOG_ELEMENT(ba_y,        MLOG_FLOAT),
+    MLOG_ELEMENT(ba_z,        MLOG_FLOAT),
+    MLOG_ELEMENT(baro_b,      MLOG_FLOAT),
+    MLOG_ELEMENT(terr_d,      MLOG_FLOAT),
+    MLOG_ELEMENT(sigma_pos_n, MLOG_FLOAT),
+    MLOG_ELEMENT(sigma_pos_e, MLOG_FLOAT),
+    MLOG_ELEMENT(sigma_pos_d, MLOG_FLOAT),
+    MLOG_ELEMENT(sigma_vel_n, MLOG_FLOAT),
+    MLOG_ELEMENT(sigma_vel_e, MLOG_FLOAT),
+    MLOG_ELEMENT(sigma_vel_d, MLOG_FLOAT),
+    MLOG_ELEMENT(sigma_att_x, MLOG_FLOAT),
+    MLOG_ELEMENT(sigma_att_y, MLOG_FLOAT),
+    MLOG_ELEMENT(sigma_att_z, MLOG_FLOAT),
+};
+MLOG_BUS_DEFINE(INS_State, INS_State_Elems);
+
 mlog_elem_t INS_Out_Elems[] = {
     MLOG_ELEMENT(timestamp, MLOG_UINT32),
     MLOG_ELEMENT(phi, MLOG_FLOAT),
@@ -269,6 +343,8 @@ static int OpticalFlow_ID;
 static int AirSpeed_ID;
 static int ExtPos_ID;
 static int INS_Out_ID;
+static int INS_Innov_ID;
+static int INS_State_ID;
 
 fmt_model_info_t ins_model_info;
 
@@ -320,6 +396,59 @@ static void mlog_start_cb(void)
     imu_data_updated = mag_data_updated = baro_data_updated = 1;
     gps_data_updated = rf_data_updated = optflow_data_updated = 1;
     airspeed_data_updated = ext_pos_data_updated = 1;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Innovation callback (firmware path)                                */
+/*                                                                     */
+/*  Called by the EKF after every scalar measurement update.  We push  */
+/*  one INS_Innov_Bus row to mlog.  grav_* fires on every IMU step     */
+/*  (~500 Hz x 2 axes) which would dominate the log volume; throttle   */
+/*  it to ~10 Hz instead.                                              */
+/* ------------------------------------------------------------------ */
+static void firmware_innov_cb(const char* tag, real32_T innov, real32_T R,
+                              real32_T S, int accepted, uint32_T ts)
+{
+    static uint32_T grav_skip = 0;
+    if (tag != NULL && tag[0] == 'g' && tag[1] == 'r' && tag[2] == 'a' && tag[3] == 'v') {
+        if ((grav_skip++ % 50U) != 0U) return;     /* 500 Hz / 50 = 10 Hz */
+    }
+
+    INS_Innov_Bus row;
+    row.timestamp = ts;
+    row.tag_id    = (int8_t)ekf_innov_tag_to_id(tag);
+    row.accepted  = (uint8_t)(accepted ? 1 : 0);
+    row.reserved  = 0;
+    row.innov     = innov;
+    row.R         = R;
+    row.S         = S;
+    row.nis       = (S > 0.0f) ? (innov * innov / S) : 0.0f;
+    mlog_push_msg((uint8_t*)&row, INS_Innov_ID, sizeof(row));
+}
+
+static void publish_ins_state(uint32_t ts)
+{
+    INS_State_Bus row;
+    row.timestamp   = ts;
+    row.bg_x        = ekf.b_g[0];
+    row.bg_y        = ekf.b_g[1];
+    row.bg_z        = ekf.b_g[2];
+    row.ba_x        = ekf.b_a[0];
+    row.ba_y        = ekf.b_a[1];
+    row.ba_z        = ekf.b_a[2];
+    row.baro_b      = ekf.baro_b;
+    row.terr_d      = ekf.terr_d;
+    int N = EKF_NSTATES;
+    row.sigma_pos_n = sqrtf(ekf.P[(EKF_X_PN  ) * N + EKF_X_PN  ]);
+    row.sigma_pos_e = sqrtf(ekf.P[(EKF_X_PE  ) * N + EKF_X_PE  ]);
+    row.sigma_pos_d = sqrtf(ekf.P[(EKF_X_PD  ) * N + EKF_X_PD  ]);
+    row.sigma_vel_n = sqrtf(ekf.P[(EKF_X_VN  ) * N + EKF_X_VN  ]);
+    row.sigma_vel_e = sqrtf(ekf.P[(EKF_X_VE  ) * N + EKF_X_VE  ]);
+    row.sigma_vel_d = sqrtf(ekf.P[(EKF_X_VD  ) * N + EKF_X_VD  ]);
+    row.sigma_att_x = sqrtf(ekf.P[(EKF_X_DTHX) * N + EKF_X_DTHX]);
+    row.sigma_att_y = sqrtf(ekf.P[(EKF_X_DTHY) * N + EKF_X_DTHY]);
+    row.sigma_att_z = sqrtf(ekf.P[(EKF_X_DTHZ) * N + EKF_X_DTHZ]);
+    mlog_push_msg((uint8_t*)&row, INS_State_ID, sizeof(row));
 }
 
 /* ------------------------------------------------------------------ */
@@ -497,10 +626,11 @@ void ins_interface_step(uint32_t timestamp)
     if (ext_pos_data_updated)  { ext_pos_data_updated = 0;
         mlog_push_msg((uint8_t*)&INS_U.External_Pos, ExtPos_ID,      sizeof(INS_U.External_Pos)); }
 
-    /* throttle INS_Out logging to ~10 Hz */
+    /* throttle INS_Out + INS_State logging to ~10 Hz */
     DEFINE_TIMETAG(ins_output, 100);
     if (check_timetag(TIMETAG(ins_output))) {
         mlog_push_msg((uint8_t*)&INS_Y.INS_Out, INS_Out_ID, sizeof(INS_Y.INS_Out));
+        publish_ins_state(timestamp);
     }
 }
 
@@ -530,6 +660,8 @@ void ins_interface_init(void)
     AirSpeed_ID    = mlog_get_bus_id("AirSpeed");
     ExtPos_ID      = mlog_get_bus_id("External_Pos");
     INS_Out_ID     = mlog_get_bus_id("INS_Out");
+    INS_Innov_ID   = mlog_get_bus_id("INS_Innov");
+    INS_State_ID   = mlog_get_bus_id("INS_State");
     FMT_ASSERT(IMU_ID         >= 0);
     FMT_ASSERT(MAG_ID         >= 0);
     FMT_ASSERT(Barometer_ID   >= 0);
@@ -539,8 +671,14 @@ void ins_interface_init(void)
     FMT_ASSERT(AirSpeed_ID    >= 0);
     FMT_ASSERT(ExtPos_ID      >= 0);
     FMT_ASSERT(INS_Out_ID     >= 0);
+    FMT_ASSERT(INS_Innov_ID   >= 0);
+    FMT_ASSERT(INS_State_ID   >= 0);
 
     mlog_register_callback(MLOG_CB_START, mlog_start_cb);
+
+    /* Hook the innovation logger.  Has to come before INS_init runs the
+     * first alignment so we capture even the start-up updates. */
+    ekf_set_innov_cb(firmware_innov_cb);
 
     INS_init();
     init_parameter();

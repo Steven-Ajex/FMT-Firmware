@@ -67,6 +67,12 @@ DEFAULTS = dict(
     diff_psi       = 0.175,  # 10 deg
     diff_v         = 1.0,    # m/s
     diff_p         = 5.0,    # m
+    bg_max         = 0.05,   # rad/s gyro bias magnitude warning
+    ba_max         = 0.8,    # m/s^2 accel bias magnitude warning
+    baro_b_max     = 50.0,   # baro bias magnitude warning [m]
+    sigma_pos_max  = 20.0,   # sustained position sigma divergence
+    sigma_vel_max  = 5.0,    # sustained velocity sigma divergence
+    sigma_att_max  = 0.3,    # sustained attitude sigma divergence
 )
 
 CHI2_95_DOF1 = 3.84
@@ -76,7 +82,9 @@ CHI2_95_DOF1 = 3.84
 # CSV helpers
 # ------------------------------------------------------------------
 def read_csv(path):
-    """Return list-of-rows + dict[col] -> list, both keyed by header."""
+    """Return dict[col_lc] -> list of values.  Header names are lowercased
+    so callers do not have to care whether the column is 'S' (offline
+    replay output) or 's' (parsed from mlog binary)."""
     cols = defaultdict(list)
     with open(path, "r", newline="") as f:
         reader = csv.DictReader(f)
@@ -84,10 +92,11 @@ def read_csv(path):
             raise SystemExit(f"{path}: empty CSV")
         for row in reader:
             for k, v in row.items():
+                key = k.lower() if k is not None else k
                 try:
-                    cols[k].append(float(v))
+                    cols[key].append(float(v))
                 except (TypeError, ValueError):
-                    cols[k].append(v)
+                    cols[key].append(v)
     return cols
 
 
@@ -151,17 +160,51 @@ class Report:
 
 
 # ------------------------------------------------------------------
+# tag_id <-> string mapping.  Mirrors the order in
+# src/model/ins/ekf_ins/lib/ekf_core.c (k_innov_tags); update both in
+# lockstep when adding a new measurement.
+# ------------------------------------------------------------------
+TAG_TABLE = [
+    "mag", "grav_x", "grav_y",
+    "gps_pos_n", "gps_pos_e", "gps_pos_d",
+    "gps_vel_n", "gps_vel_e", "gps_vel_d",
+    "baro", "rf",
+    "opf_x", "opf_y",
+    "ext_x", "ext_y", "ext_z",
+    "ext_phi", "ext_theta", "ext_psi",
+]
+
+
+def tag_from_id(tid):
+    try:
+        i = int(tid)
+    except (TypeError, ValueError):
+        return "?"
+    if 0 <= i < len(TAG_TABLE):
+        return TAG_TABLE[i]
+    return "?"
+
+
+# ------------------------------------------------------------------
 # Innovation / gate analysis
 # ------------------------------------------------------------------
 def analyse_innov(path, opts, rep):
     rows = read_csv(path)
-    if "tag" not in rows:
-        rep.add("error", "innov", f"{path} has no 'tag' column")
+    if "tag" in rows:
+        tags = rows["tag"]
+    elif "tag_id" in rows:
+        tags = [tag_from_id(t) for t in rows["tag_id"]]
+    else:
+        rep.add("error", "innov", f"{path} has no 'tag' or 'tag_id' column")
         return
-    tags = rows["tag"]
     nis  = rows.get("nis",       [0.0] * len(tags))
     acc  = rows.get("accepted",  [1]   * len(tags))
     ts   = rows.get("timestamp", [0]   * len(tags))
+
+    # If reading parsed mlog (no NIS column), compute it from innov / S
+    if "nis" not in rows and "innov" in rows and "s" in rows:
+        nis = [(i*i/s if s and s > 0 else 0.0)
+               for i, s in zip(rows["innov"], rows["s"])]
 
     by_tag = defaultdict(lambda: dict(nis=[], acc=[], ts=[]))
     for i, t in enumerate(tags):
@@ -228,7 +271,7 @@ def analyse_innov(path, opts, rep):
 def analyse_ins_out(path, opts, rep):
     cols = read_csv(path)
     needed = ["phi", "theta", "psi", "vn", "ve", "vd",
-              "x_R", "y_R", "h_R",
+              "x_r", "y_r", "h_r",
               "quat0", "quat1", "quat2", "quat3"]
     miss = [c for c in needed if c not in cols]
     if miss:
@@ -257,7 +300,7 @@ def analyse_ins_out(path, opts, rep):
     jump_check("theta", opts.jump_phi)
     jump_check("psi",   opts.jump_psi, wrap=True)
     for ax in ("vn", "ve", "vd"):  jump_check(ax, opts.jump_v)
-    for ax in ("x_R", "y_R", "h_R"):  jump_check(ax, opts.jump_p)
+    for ax in ("x_r", "y_r", "h_r"):  jump_check(ax, opts.jump_p)
 
     if all(c in cols for c in ("quat0", "quat1", "quat2", "quat3")):
         worst = 0.0; worst_t = None
@@ -278,7 +321,74 @@ def analyse_ins_out(path, opts, rep):
                    ["theta range [deg]", f"{math.degrees(min(cols.get('theta', [0]))):.2f} .. {math.degrees(max(cols.get('theta', [0]))):.2f}"],
                    ["psi range [deg]",   f"{math.degrees(min(cols.get('psi', [0]))):.2f} .. {math.degrees(max(cols.get('psi', [0]))):.2f}"],
                    ["|v| max [m/s]",     f"{max(math.sqrt(cols['vn'][i]**2+cols['ve'][i]**2+cols['vd'][i]**2) for i in range(n)) if n and 'vn' in cols else 0:.2f}"],
-                   ["|p| max [m]",       f"{max(math.sqrt(cols['x_R'][i]**2+cols['y_R'][i]**2+cols['h_R'][i]**2) for i in range(n)) if n and 'x_R' in cols else 0:.2f}"]])
+                   ["|p| max [m]",       f"{max(math.sqrt(cols['x_r'][i]**2+cols['y_r'][i]**2+cols['h_r'][i]**2) for i in range(n)) if n and 'x_r' in cols else 0:.2f}"]])
+
+
+# ------------------------------------------------------------------
+# INS_State analysis -- bias trend, sigma collapse / divergence
+# ------------------------------------------------------------------
+def analyse_state(path, opts, rep):
+    cols = read_csv(path)
+    n = len(cols.get("timestamp", []))
+    if n == 0:
+        rep.add("error", "STATE", f"{path} has no rows")
+        return
+
+    def vec_mag(name_x, name_y, name_z, idx):
+        if not all(k in cols for k in (name_x, name_y, name_z)):
+            return None
+        return math.sqrt(cols[name_x][idx] ** 2
+                       + cols[name_y][idx] ** 2
+                       + cols[name_z][idx] ** 2)
+
+    last = n - 1
+    bg = vec_mag("bg_x", "bg_y", "bg_z", last)
+    ba = vec_mag("ba_x", "ba_y", "ba_z", last)
+    summary = [["rows", n]]
+    if "timestamp" in cols and n:
+        summary.append(["t span [s]", f"{(cols['timestamp'][-1]-cols['timestamp'][0])/1000.0:.1f}"])
+    if bg is not None: summary.append(["|bg| final [rad/s]",  f"{bg:.5f}"])
+    if ba is not None: summary.append(["|ba| final [m/s^2]",  f"{ba:.4f}"])
+    if "baro_b" in cols and n: summary.append(["baro_b final [m]", f"{cols['baro_b'][-1]:.3f}"])
+    if "terr_d" in cols and n: summary.append(["terr_d final [m]", f"{cols['terr_d'][-1]:.3f}"])
+    rep.add_table("INS_State summary", ["metric", "value"], summary)
+
+    # Bias drift checks
+    if bg is not None and bg > opts.bg_max:
+        rep.add("warn", "BIAS",
+                f"|bg| final {bg:.5f} rad/s exceeds {opts.bg_max} -- gyro cal / temperature?")
+    if ba is not None and ba > opts.ba_max:
+        rep.add("warn", "BIAS",
+                f"|ba| final {ba:.4f} m/s^2 exceeds {opts.ba_max} -- accel cal?")
+    if "baro_b" in cols and n and abs(cols["baro_b"][-1]) > opts.baro_b_max:
+        rep.add("info", "BIAS",
+                f"baro_b final {cols['baro_b'][-1]:.1f} m -- big GPS/baro reference offset")
+
+    # Sigma divergence: sustained > threshold over the last 25 % of the run
+    def sigma_late_max(*names):
+        if not all(name in cols for name in names): return None
+        i_lo = int(0.75 * n)
+        return max(max(cols[name][i:i+1] or [0.0]) for name in names
+                   for i in range(i_lo, n)) if n - i_lo > 0 else 0.0
+
+    def sigma_check(label, names, thr, kind):
+        if not all(name in cols for name in names): return
+        i_lo = int(0.75 * n)
+        worst = 0.0
+        for i in range(i_lo, n):
+            for name in names:
+                if cols[name][i] > worst:
+                    worst = cols[name][i]
+        if worst > thr:
+            rep.add("warn", "COV",
+                    f"{label} sigma late-window max {worst:.3f} > {thr} ({kind})")
+
+    sigma_check("position", ("sigma_pos_n", "sigma_pos_e", "sigma_pos_d"),
+                opts.sigma_pos_max, "filter losing position observability")
+    sigma_check("velocity", ("sigma_vel_n", "sigma_vel_e", "sigma_vel_d"),
+                opts.sigma_vel_max, "filter losing velocity observability")
+    sigma_check("attitude", ("sigma_att_x", "sigma_att_y", "sigma_att_z"),
+                opts.sigma_att_max, "filter losing attitude observability")
 
 
 # ------------------------------------------------------------------
@@ -287,7 +397,7 @@ def analyse_ins_out(path, opts, rep):
 def analyse_reference(ref_path, replay_path, opts, rep):
     ref = read_csv(ref_path)
     rep_csv = read_csv(replay_path)
-    common = [c for c in ("phi","theta","psi","vn","ve","vd","x_R","y_R","h_R")
+    common = [c for c in ("phi","theta","psi","vn","ve","vd","x_r","y_r","h_r")
               if c in ref and c in rep_csv]
     if "timestamp" not in ref or "timestamp" not in rep_csv:
         rep.add("info", "DIFF", "missing timestamp column; skipping align")
@@ -315,7 +425,7 @@ def analyse_reference(ref_path, replay_path, opts, rep):
 
         thr = (opts.diff_phi if c in ("phi","theta") else
                opts.diff_psi if c == "psi" else
-               opts.diff_v if c in ("vn","ve","vd") else
+               opts.diff_v   if c in ("vn","ve","vd") else
                opts.diff_p)
         if r > thr:
             rep.add("warn", "DIFF",
@@ -331,7 +441,10 @@ def main():
     ap = argparse.ArgumentParser(description="Diagnose ekf_ins replay output.")
     ap.add_argument("ins_out",      type=Path, help="INS_Out_replay.csv")
     ap.add_argument("--innov-csv",  type=Path, default=None,
-                    help="innovation log from ekf_replay --innov-csv")
+                    help="innovation log (from ekf_replay --innov-csv or "
+                         "the parsed-mlog INS_Innov CSV)")
+    ap.add_argument("--state-csv",  type=Path, default=None,
+                    help="parsed-mlog INS_State CSV (bias / sigma trends)")
     ap.add_argument("--reference",  type=Path, default=None,
                     help="recorded INS_Out CSV from the same flight")
     ap.add_argument("--report",     type=Path, default=None,
@@ -344,6 +457,8 @@ def main():
     if args.innov_csv is not None:
         analyse_innov(args.innov_csv, args, rep)
     analyse_ins_out(args.ins_out, args, rep)
+    if args.state_csv is not None:
+        analyse_state(args.state_csv, args, rep)
     if args.reference is not None:
         analyse_reference(args.reference, args.ins_out, args, rep)
 
