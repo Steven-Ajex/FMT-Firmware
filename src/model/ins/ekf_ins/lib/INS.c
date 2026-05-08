@@ -24,6 +24,9 @@
 #include "ekf_geo.h"
 #include "ekf_gps.h"
 #include "ekf_baro.h"
+#include "ekf_rangefinder.h"
+#include "ekf_optflow.h"
+#include "ekf_extpos.h"
 
 INS_U_T      INS_U;
 INS_Y_T      INS_Y;
@@ -212,6 +215,9 @@ void INS_step(void)
     static uint32_T last_mag_ts  = 0;
     static uint32_T last_gps_ts  = 0;
     static uint32_T last_baro_ts = 0;
+    static uint32_T last_rf_ts   = 0;
+    static uint32_T last_opf_ts  = 0;
+    static uint32_T last_ext_ts  = 0;
 
     if (INS_U.MAG.timestamp != last_mag_ts) {
         last_mag_ts = INS_U.MAG.timestamp;
@@ -225,6 +231,19 @@ void INS_step(void)
     if (INS_U.Barometer.timestamp != last_baro_ts) {
         last_baro_ts = INS_U.Barometer.timestamp;
         ekf_update_baro();
+    }
+    if (INS_U.Rangefinder.timestamp != last_rf_ts) {
+        last_rf_ts = INS_U.Rangefinder.timestamp;
+        ekf_update_rangefinder();
+    }
+    if (INS_U.Optical_Flow.timestamp != last_opf_ts) {
+        last_opf_ts = INS_U.Optical_Flow.timestamp;
+        ekf_update_optflow();
+    }
+    if (INS_U.External_Pos.timestamp != last_ext_ts) {
+        last_ext_ts = INS_U.External_Pos.timestamp;
+        ekf_update_extpos();
+        ekf_update_extatt();
     }
 
     /* ---- assemble output bus ---- */
