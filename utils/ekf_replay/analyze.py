@@ -79,6 +79,14 @@ DEFAULTS = dict(
     accel_norm_eps = 0.30,   # |mean(|a|) - g| tolerance, m/s^2
     accel_static_var_max = 0.30,  # best 1-sec window variance for static check
     mag_norm_cv_pct  = 5.0,  # mag magnitude coefficient of variation
+    # ---- IMU spike / GPS / filter-dead rules (Phase 10) ----
+    imu_spike_g    = 1.5,    # rad/s, single-sample gyro outlier (3-pt median)
+    imu_spike_a    = 30.0,   # m/s^2, single-sample accel outlier (~3 g)
+    imu_spike_pct  = 0.05,   # warn if > pct of samples are spikes
+    gps_min_sv     = 6,      # warn if any sample has fewer SV
+    gps_max_hacc_m = 5.0,    # warn if hAcc above this in metres
+    gps_drop_warn  = 1,      # warn if any fixType regression
+    filter_dead_rel = 0.001, # sigma range / max(sigma) below this -> dead
 )
 
 CHI2_95_DOF1 = 3.84
@@ -477,6 +485,30 @@ def analyse_imu(path, opts, rep):
                         f"static window @ t={best_t} ms: |a|={best_mean:.3f} m/s^2 "
                         f"deviates from g - accel scale / cal?")
 
+    # ---- single-sample spike detection (3-point median residual) ----
+    for axis in ("gyr_x", "gyr_y", "gyr_z", "acc_x", "acc_y", "acc_z"):
+        if axis not in cols: continue
+        d = cols[axis]
+        thresh = opts.imu_spike_g if axis.startswith("gyr") else opts.imu_spike_a
+        spikes = 0
+        worst = 0.0
+        worst_t = 0
+        for i in range(1, len(d) - 1):
+            ref = 0.5 * (d[i - 1] + d[i + 1])
+            r = abs(d[i] - ref)
+            if r > thresh:
+                spikes += 1
+                if r > worst:
+                    worst = r
+                    worst_t = cols['timestamp'][i] if 'timestamp' in cols else i
+        if spikes > 0:
+            pct = 100.0 * spikes / max(1, len(d) - 2)
+            unit = "rad/s" if axis.startswith("gyr") else "m/s^2"
+            sev = "warn" if pct > 100.0 * opts.imu_spike_pct else "info"
+            rep.add(sev, "IMU",
+                    f"{axis}: {spikes} single-sample spikes "
+                    f"({pct:.2f}%), worst {worst:.2f} {unit} @ t={worst_t} ms")
+
     rep.add_table("IMU summary", ["metric", "value"], summary)
 
 
@@ -507,6 +539,125 @@ def analyse_mag(path, opts, rep):
         rep.add("warn", "MAG",
                 f"mag norm CV {cv:.1f}% > {opts.mag_norm_cv_pct}% - "
                 f"electromagnetic interference or hard-iron error?")
+
+
+# ------------------------------------------------------------------
+# GPS quality / RTK degradation
+#   fixType:  0 no fix, 1 dead reckoning, 2 2D, 3 3D, 4 GNSS+DR,
+#             5 time only, 6 RTK float, 7 RTK fixed (vendor-specific
+#             above 3 - we only treat <3 as 'no usable fix')
+#   numSV:    satellites in use
+#   hAcc / vAcc / sAcc: uBlox reports millimetres / mm/s
+# ------------------------------------------------------------------
+def analyse_gps(path, opts, rep):
+    cols = read_csv(path)
+    n = len(cols.get("timestamp", []))
+    if n == 0:
+        rep.add("error", "GPS", f"{path} has no rows")
+        return
+
+    fix = [int(v) for v in cols.get("fixtype", [])]
+    sv  = [int(v) for v in cols.get("numsv",   [])]
+    if not fix or not sv:
+        rep.add("info", "GPS", "GPS CSV missing fixType / numSV")
+        return
+
+    # fix-type histogram
+    hist = {}
+    for f in fix: hist[f] = hist.get(f, 0) + 1
+    summary = [["rows", n],
+               ["t span [s]", f"{(cols['timestamp'][-1]-cols['timestamp'][0])/1000.0:.1f}"]]
+    for k in sorted(hist.keys()):
+        summary.append([f"fixType=={k} samples", f"{hist[k]} ({100.0*hist[k]/n:.1f}%)"])
+
+    # regressions (fixType decreased between consecutive samples)
+    drops = sum(1 for i in range(1, n) if fix[i] < fix[i - 1])
+    summary.append(["fixType regressions", drops])
+
+    # numSV stats
+    summary.append(["numSV mean / min", f"{sum(sv)/n:.1f} / {min(sv)}"])
+
+    # accuracy stats (uBlox: millimetres / mm/s)
+    if "hacc" in cols:
+        h_max_m = max(cols["hacc"]) / 1000.0
+        h_med_m = sorted(cols["hacc"])[n // 2] / 1000.0
+        summary.append(["hAcc median / max [m]", f"{h_med_m:.2f} / {h_max_m:.2f}"])
+    if "vacc" in cols:
+        v_max_m = max(cols["vacc"]) / 1000.0
+        summary.append(["vAcc max [m]", f"{v_max_m:.2f}"])
+
+    rep.add_table("GPS summary", ["metric", "value"], summary)
+
+    # ---- findings ----
+    final_fix = fix[-1]
+    if final_fix < 3:
+        rep.add("warn", "GPS", f"final fixType={final_fix} - 3D fix not held to end")
+    no_fix_pct = 100.0 * sum(1 for f in fix if f < 3) / n
+    if no_fix_pct > 5.0:
+        rep.add("warn", "GPS",
+                f"{no_fix_pct:.1f}% of samples have fixType<3 (no 3D fix)")
+    if drops >= opts.gps_drop_warn and drops > 0:
+        # find the first drop and report it
+        first_t = next((cols['timestamp'][i] for i in range(1, n)
+                        if fix[i] < fix[i - 1]), 0)
+        rep.add("warn" if drops > 5 else "info", "GPS",
+                f"{drops} fixType regressions; first @ t={first_t} ms")
+    if min(sv) < opts.gps_min_sv:
+        first_lo = next((cols['timestamp'][i] for i in range(n)
+                         if sv[i] < opts.gps_min_sv), 0)
+        rep.add("warn", "GPS",
+                f"numSV dropped to {min(sv)} (< {opts.gps_min_sv}) "
+                f"@ t={first_lo} ms - poor satellite geometry")
+    if "hacc" in cols and max(cols["hacc"]) / 1000.0 > opts.gps_max_hacc_m:
+        rep.add("info", "GPS",
+                f"max hAcc {max(cols['hacc'])/1000.0:.2f} m exceeds "
+                f"{opts.gps_max_hacc_m} m - intermittent quality drop")
+
+    # RTK regression: 6/7 -> <=4 means lost RTK lock
+    rtk_lost = 0
+    for i in range(1, n):
+        if fix[i - 1] >= 6 and fix[i] <= 4:
+            rtk_lost += 1
+    if rtk_lost > 0:
+        rep.add("warn", "GPS", f"RTK lock lost {rtk_lost} time(s) (fixType 6/7 -> <=4)")
+
+
+# ------------------------------------------------------------------
+# Filter-dead detector - sigma trace flat lines
+#   The EKF must keep moving the covariance every step (predict adds Q,
+#   updates subtract).  If a sigma channel never changes for the full
+#   recording, the corresponding subsystem is starved of measurements
+#   AND not propagating either - i.e. the filter task is hung.
+# ------------------------------------------------------------------
+def detect_filter_dead(state_csv, opts, rep):
+    cols = read_csv(state_csv)
+    n = len(cols.get("timestamp", []))
+    if n < 10:
+        return
+
+    sigma_axes = (
+        "sigma_pos_n", "sigma_pos_e", "sigma_pos_d",
+        "sigma_vel_n", "sigma_vel_e", "sigma_vel_d",
+        "sigma_att_x", "sigma_att_y", "sigma_att_z",
+    )
+    flat = []
+    for ax in sigma_axes:
+        if ax not in cols: continue
+        d = cols[ax]
+        if not d: continue
+        peak = max(abs(v) for v in d)
+        if peak < 1e-12:
+            flat.append((ax, 0.0))
+            continue
+        rng = max(d) - min(d)
+        rel = rng / peak
+        if rel < opts.filter_dead_rel:
+            flat.append((ax, rel))
+    if flat:
+        joined = ", ".join(f"{ax} (rel range {r*100:.3f}%)" for ax, r in flat)
+        rep.add("warn", "DEAD",
+                f"sigma channels did not change over {n} samples: {joined} "
+                f"- filter possibly stuck or starved of measurements")
 
 
 # ------------------------------------------------------------------
@@ -680,6 +831,8 @@ def main():
                     help="parsed-mlog IMU CSV (vibration + gravity sanity)")
     ap.add_argument("--mag-csv",    type=Path, default=None,
                     help="parsed-mlog MAG CSV (field-norm constancy check)")
+    ap.add_argument("--gps-csv",    type=Path, default=None,
+                    help="parsed-mlog GPS_uBlox CSV (RTK / fix / numSV check)")
     ap.add_argument("--reference",  type=Path, default=None,
                     help="recorded INS_Out CSV from the same flight")
     ap.add_argument("--report",     type=Path, default=None,
@@ -702,6 +855,10 @@ def main():
         analyse_imu(args.imu_csv, args, rep)
     if args.mag_csv is not None:
         analyse_mag(args.mag_csv, args, rep)
+    if args.gps_csv is not None:
+        analyse_gps(args.gps_csv, args, rep)
+    if args.state_csv is not None:
+        detect_filter_dead(args.state_csv, args, rep)
     if args.reference is not None:
         analyse_reference(args.reference, args.ins_out, args, rep)
     if args.plot_dir is not None:
