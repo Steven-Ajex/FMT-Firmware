@@ -73,6 +73,12 @@ DEFAULTS = dict(
     sigma_pos_max  = 20.0,   # sustained position sigma divergence
     sigma_vel_max  = 5.0,    # sustained velocity sigma divergence
     sigma_att_max  = 0.3,    # sustained attitude sigma divergence
+    # ---- IMU vibration / quality rules (Phase 9) ----
+    gyr_hf_max     = 0.10,   # rad/s high-frequency RMS
+    acc_hf_max     = 2.0,    # m/s^2 high-frequency RMS
+    accel_norm_eps = 0.30,   # |mean(|a|) - g| tolerance, m/s^2
+    accel_static_var_max = 0.30,  # best 1-sec window variance for static check
+    mag_norm_cv_pct  = 5.0,  # mag magnitude coefficient of variation
 )
 
 CHI2_95_DOF1 = 3.84
@@ -392,6 +398,231 @@ def analyse_state(path, opts, rep):
 
 
 # ------------------------------------------------------------------
+# Sensor quality rules
+#   IMU      vibration (HF residual after low-pass) + gravity sanity
+#   MAG      field magnitude constancy (ferromagnetic interference)
+# ------------------------------------------------------------------
+def _high_freq_rms(values, alpha=0.05):
+    """RMS of a first-order high-pass residual; alpha approx fc / fs."""
+    if not values: return 0.0
+    lp = values[0]
+    acc = 0.0
+    for v in values:
+        lp += alpha * (v - lp)
+        d = v - lp
+        acc += d * d
+    return math.sqrt(acc / len(values))
+
+
+def analyse_imu(path, opts, rep):
+    cols = read_csv(path)
+    n = len(cols.get("timestamp", []))
+    if n == 0:
+        rep.add("error", "IMU", f"{path} has no rows")
+        return
+
+    summary = [["rows", n]]
+    if "timestamp" in cols:
+        summary.append(["t span [s]", f"{(cols['timestamp'][-1]-cols['timestamp'][0])/1000.0:.1f}"])
+
+    # high-frequency RMS per axis
+    for axis, thresh in (("gyr_x", opts.gyr_hf_max), ("gyr_y", opts.gyr_hf_max),
+                        ("gyr_z", opts.gyr_hf_max),
+                        ("acc_x", opts.acc_hf_max), ("acc_y", opts.acc_hf_max),
+                        ("acc_z", opts.acc_hf_max)):
+        if axis not in cols: continue
+        hf = _high_freq_rms(cols[axis])
+        unit = "rad/s" if axis.startswith("gyr") else "m/s^2"
+        summary.append([f"HF-RMS {axis} [{unit}]", f"{hf:.4f}"])
+        if hf > thresh:
+            rep.add("warn", "IMU",
+                    f"{axis} HF-RMS {hf:.3f} {unit} exceeds {thresh:.3f} - vibration too high")
+
+    # gravity / accel magnitude check
+    if all(k in cols for k in ("acc_x", "acc_y", "acc_z")):
+        mags = [math.sqrt(cols['acc_x'][i]**2 + cols['acc_y'][i]**2 + cols['acc_z'][i]**2)
+                for i in range(n)]
+        mean_mag = sum(mags) / n
+        summary.append(["accel norm mean [m/s^2]", f"{mean_mag:.4f}"])
+        if abs(mean_mag - 9.80665) > opts.accel_norm_eps:
+            rep.add("warn", "IMU",
+                    f"long-run accel-norm mean {mean_mag:.3f} m/s^2 (g=9.806); "
+                    f"calibration / mounting issue?")
+
+        # find best static 1-second window
+        rate_hz = 500
+        if n > 1 and "timestamp" in cols:
+            dt = (cols['timestamp'][-1]-cols['timestamp'][0]) / max(n-1, 1)
+            if dt > 0: rate_hz = max(1, int(round(1000.0 / dt)))
+        win = min(rate_hz, n)
+        if win >= 50:
+            best_var = float("inf")
+            best_mean = 0.0
+            best_t = 0
+            step = max(1, win // 4)
+            for i in range(0, n - win, step):
+                seg = mags[i:i + win]
+                m = sum(seg) / win
+                v = sum((s - m)**2 for s in seg) / win
+                if v < best_var:
+                    best_var, best_mean = v, m
+                    best_t = cols['timestamp'][i] if 'timestamp' in cols else i
+            summary.append(["best static window var [m^2/s^4]", f"{best_var:.4f}"])
+            if best_var > opts.accel_static_var_max:
+                rep.add("info", "IMU",
+                        f"no calm 1-second window found (best var {best_var:.3f}); "
+                        f"vehicle never settles?")
+            elif abs(best_mean - 9.80665) > opts.accel_norm_eps:
+                rep.add("warn", "IMU",
+                        f"static window @ t={best_t} ms: |a|={best_mean:.3f} m/s^2 "
+                        f"deviates from g - accel scale / cal?")
+
+    rep.add_table("IMU summary", ["metric", "value"], summary)
+
+
+def analyse_mag(path, opts, rep):
+    cols = read_csv(path)
+    n = len(cols.get("timestamp", []))
+    if n == 0:
+        rep.add("error", "MAG", f"{path} has no rows")
+        return
+    if not all(k in cols for k in ("mag_x", "mag_y", "mag_z")):
+        rep.add("info", "MAG", "mag CSV missing one of mag_x/mag_y/mag_z")
+        return
+
+    norms = [math.sqrt(cols['mag_x'][i]**2 + cols['mag_y'][i]**2 + cols['mag_z'][i]**2)
+             for i in range(n)]
+    m = sum(norms) / n
+    var = sum((x - m)**2 for x in norms) / n
+    sd = math.sqrt(var)
+    cv = (sd / m * 100.0) if m > 1e-9 else 0.0
+    rep.add_table("MAG summary", ["metric", "value"], [
+        ["rows", n],
+        ["t span [s]", f"{(cols['timestamp'][-1]-cols['timestamp'][0])/1000.0:.1f}"],
+        ["mag norm mean", f"{m:.4f}"],
+        ["mag norm sigma", f"{sd:.4f}"],
+        ["coefficient of variation [%]", f"{cv:.2f}"],
+    ])
+    if cv > opts.mag_norm_cv_pct:
+        rep.add("warn", "MAG",
+                f"mag norm CV {cv:.1f}% > {opts.mag_norm_cv_pct}% - "
+                f"electromagnetic interference or hard-iron error?")
+
+
+# ------------------------------------------------------------------
+# Plotting (matplotlib optional)
+# ------------------------------------------------------------------
+def _import_pyplot():
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        return plt
+    except ImportError:
+        return None
+
+
+def make_plots(args, plot_dir, rep):
+    plt = _import_pyplot()
+    if plt is None:
+        rep.add("info", "PLOT", "matplotlib not available; skipping plots")
+        return
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    written = []
+
+    # ---- NIS histograms per tag ----
+    if args.innov_csv is not None and args.innov_csv.exists():
+        cols = read_csv(args.innov_csv)
+        tags = (cols["tag"] if "tag" in cols
+                else [tag_from_id(t) for t in cols.get("tag_id", [])])
+        nis = cols.get("nis", None)
+        if nis is None and "innov" in cols and "s" in cols:
+            nis = [(i*i/s if s and s > 0 else 0.0)
+                   for i, s in zip(cols["innov"], cols["s"])]
+        if tags and nis:
+            buckets = {}
+            for t, v in zip(tags, nis):
+                buckets.setdefault(str(t), []).append(float(v))
+            for tag, vs in sorted(buckets.items()):
+                if not vs: continue
+                fig, ax = plt.subplots(figsize=(6, 3))
+                clipped = [min(v, 50.0) for v in vs]
+                ax.hist(clipped, bins=40, edgecolor="black", linewidth=0.3)
+                ax.axvline(3.84, color="orange", linestyle="--", label="chi^2(1,0.95)=3.84")
+                ax.axvline(1.0,  color="green",  linestyle=":",  label="ideal mean=1")
+                ax.set_xlabel("NIS (clipped at 50)")
+                ax.set_ylabel("count")
+                ax.set_title(f"NIS distribution -- {tag}  (n={len(vs)})")
+                ax.legend(fontsize=7)
+                ax.grid(True, linewidth=0.3)
+                fig.tight_layout()
+                p = plot_dir / f"nis_{tag}.png"
+                fig.savefig(p, dpi=120); plt.close(fig)
+                written.append(p)
+
+    # ---- INS_State sigma + bias time-series ----
+    if args.state_csv is not None and args.state_csv.exists():
+        cols = read_csv(args.state_csv)
+        ts = [t / 1000.0 for t in cols.get("timestamp", [])]
+
+        groups = [
+            ("sigma_attitude.png", "attitude sigma [rad]",
+             [("sigma_att_x", "x"), ("sigma_att_y", "y"), ("sigma_att_z", "z")]),
+            ("sigma_velocity.png", "velocity sigma [m/s]",
+             [("sigma_vel_n", "N"), ("sigma_vel_e", "E"), ("sigma_vel_d", "D")]),
+            ("sigma_position.png", "position sigma [m]",
+             [("sigma_pos_n", "N"), ("sigma_pos_e", "E"), ("sigma_pos_d", "D")]),
+            ("bias_gyro.png",      "gyro bias [rad/s]",
+             [("bg_x", "x"), ("bg_y", "y"), ("bg_z", "z")]),
+            ("bias_accel.png",     "accel bias [m/s^2]",
+             [("ba_x", "x"), ("ba_y", "y"), ("ba_z", "z")]),
+            ("baro_terr.png",      "baro_b / terr_d [m]",
+             [("baro_b", "baro_b"), ("terr_d", "terr_d")]),
+        ]
+        for fname, ylabel, series in groups:
+            present = [(k, lbl) for k, lbl in series if k in cols]
+            if not present: continue
+            fig, ax = plt.subplots(figsize=(7, 3))
+            for k, lbl in present:
+                ax.plot(ts, cols[k], label=lbl, linewidth=0.7)
+            ax.set_xlabel("t [s]")
+            ax.set_ylabel(ylabel)
+            ax.legend(fontsize=8, loc="best")
+            ax.grid(True, linewidth=0.3)
+            fig.tight_layout()
+            p = plot_dir / fname
+            fig.savefig(p, dpi=120); plt.close(fig)
+            written.append(p)
+
+    # ---- INS_Out attitude + velocity overview ----
+    if args.ins_out is not None and args.ins_out.exists():
+        cols = read_csv(args.ins_out)
+        ts = [t / 1000.0 for t in cols.get("timestamp", [])]
+        for fname, ylabel, series in [
+            ("ins_attitude.png", "attitude [rad]",
+             [("phi", "phi"), ("theta", "theta"), ("psi", "psi")]),
+            ("ins_velocity.png", "velocity [m/s]",
+             [("vn", "N"), ("ve", "E"), ("vd", "D")]),
+            ("ins_position.png", "position [m]",
+             [("x_r", "x_R"), ("y_r", "y_R"), ("h_r", "h_R")]),
+        ]:
+            present = [(k, lbl) for k, lbl in series if k in cols]
+            if not present: continue
+            fig, ax = plt.subplots(figsize=(7, 3))
+            for k, lbl in present:
+                ax.plot(ts, cols[k], label=lbl, linewidth=0.7)
+            ax.set_xlabel("t [s]")
+            ax.set_ylabel(ylabel)
+            ax.legend(fontsize=8); ax.grid(True, linewidth=0.3)
+            fig.tight_layout()
+            p = plot_dir / fname
+            fig.savefig(p, dpi=120); plt.close(fig)
+            written.append(p)
+
+    rep.add("info", "PLOT", f"wrote {len(written)} plot(s) to {plot_dir}")
+
+
+# ------------------------------------------------------------------
 # Reference comparison
 # ------------------------------------------------------------------
 def analyse_reference(ref_path, replay_path, opts, rep):
@@ -445,10 +676,18 @@ def main():
                          "the parsed-mlog INS_Innov CSV)")
     ap.add_argument("--state-csv",  type=Path, default=None,
                     help="parsed-mlog INS_State CSV (bias / sigma trends)")
+    ap.add_argument("--imu-csv",    type=Path, default=None,
+                    help="parsed-mlog IMU CSV (vibration + gravity sanity)")
+    ap.add_argument("--mag-csv",    type=Path, default=None,
+                    help="parsed-mlog MAG CSV (field-norm constancy check)")
     ap.add_argument("--reference",  type=Path, default=None,
                     help="recorded INS_Out CSV from the same flight")
     ap.add_argument("--report",     type=Path, default=None,
                     help="write the textual report here as well")
+    ap.add_argument("--plot-dir",   type=Path, default=None,
+                    help="directory to write PNG plots (NIS hist + sigma / "
+                         "bias time-series + INS_Out overview).  Requires "
+                         "matplotlib; silently skipped if missing.")
     for k, v in DEFAULTS.items():
         ap.add_argument(f"--{k.replace('_','-')}", dest=k, type=float, default=v)
     args = ap.parse_args()
@@ -459,8 +698,14 @@ def main():
     analyse_ins_out(args.ins_out, args, rep)
     if args.state_csv is not None:
         analyse_state(args.state_csv, args, rep)
+    if args.imu_csv is not None:
+        analyse_imu(args.imu_csv, args, rep)
+    if args.mag_csv is not None:
+        analyse_mag(args.mag_csv, args, rep)
     if args.reference is not None:
         analyse_reference(args.reference, args.ins_out, args, rep)
+    if args.plot_dir is not None:
+        make_plots(args, args.plot_dir, rep)
 
     rep.emit()
     if args.report is not None:
