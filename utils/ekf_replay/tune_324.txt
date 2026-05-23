@@ -1,0 +1,20 @@
+ext_x        n=  1786 <NIS>=0.443 p95=0.839 rej=0.0%
+ext_y        n=  1786 <NIS>=1.005 p95=2.262 rej=0.0%
+ext_z        n=  1786 <NIS>=0.066 p95=0.139 rej=0.0%
+grav_x       n= 87836 <NIS>=0.012 p95=0.037 rej=0.0%
+grav_y       n= 87836 <NIS>=0.009 p95=0.023 rej=0.0%
+mag          n= 89286 <NIS>=1.284 p95=2.979 rej=1.0%
+opf_x        n=   796 <NIS>=1.565 p95=5.462 rej=1.1%
+opf_y        n=   796 <NIS>=2.706 p95=10.178 rej=1.8%
+
+tags                 param            n      <NIS>  rej%  sigma   ->sigma  x     gate      gate_note
+-------------------  ---------------  -----  -----  ----  ------  -------  ----  --------  ---------
+ext_x, ext_y, ext_z  EKF_EXT_POS_NSE  5358   0.505  0.0   0.0500  0.0355   0.71  -         -        
+mag                  EKF_MAG_NSE      89286  1.284  1.0   0.0500  0.0567   1.13  5.0->5.0  ok       
+opf_x, opf_y         EKF_OPF_NSE      1592   2.136  1.4   0.2000  0.2923   1.46  5.0->5.0  ok       
+
+# tune.py - paste into the FMT shell.
+# Re-runnable: each line is idempotent.
+param set EKF_EXT_POS_NSE 0.035523
+param set EKF_MAG_NSE 0.056651
+param set EKF_OPF_NSE 0.292295

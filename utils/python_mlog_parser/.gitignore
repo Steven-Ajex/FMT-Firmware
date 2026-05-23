@@ -1,0 +1,4 @@
+# Raw binary log copied in for parsing
+mlog1.bin
+# Per-message CSV dumps produced by parse_mlog.py
+out/

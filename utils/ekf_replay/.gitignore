@@ -1,7 +1,11 @@
 ekf_replay
+ekf_replay.exe
 *.o
 .run_diff_work
 INS_Out_replay.csv
 innov.csv
 diff.png
 report.txt
+# Raw mlog parser dumps and ad-hoc replay outputs (often hundreds of MB)
+INS_Innov*.csv
+ekf_*_replay_*.csv
