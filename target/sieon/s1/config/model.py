@@ -15,7 +15,7 @@ if vehicle_type == 'Multicopter':
     else:
         MODELS = [
             'plant/multicopter',
-            'ins/cf_ins',
+            'ins/ekf_ins',
             'fms/mc_fms',
             'control/mc_controller',
         ]
