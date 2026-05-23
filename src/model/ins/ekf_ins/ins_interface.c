@@ -70,7 +70,8 @@ static param_t __param_list[] = {
     PARAM_FLOAT(EKF_GPS_VEL_NSE, 0.3f,  false),
     PARAM_FLOAT(EKF_GPS_ALT_NSE, 1.5f,  false),
     PARAM_FLOAT(EKF_BARO_NSE,    2.0f,  false),
-    PARAM_FLOAT(EKF_MAG_NSE,     0.05f, false),
+    PARAM_FLOAT(EKF_MAG_NSE,     0.15f, false),
+    PARAM_FLOAT(EKF_MAG_DECL,    0.0f,  false),   /* magnetic declination, rad (E +) */
     PARAM_FLOAT(EKF_RF_NSE,      0.1f,  false),
     PARAM_FLOAT(EKF_OPF_NSE,     0.2f,  false),
     PARAM_FLOAT(EKF_EXT_POS_NSE, 0.05f, false),
@@ -438,16 +439,16 @@ static void publish_ins_state(uint32_t ts)
     row.ba_z        = ekf.b_a[2];
     row.baro_b      = ekf.baro_b;
     row.terr_d      = ekf.terr_d;
-    int N = EKF_NSTATES;
-    row.sigma_pos_n = sqrtf(ekf.P[(EKF_X_PN  ) * N + EKF_X_PN  ]);
-    row.sigma_pos_e = sqrtf(ekf.P[(EKF_X_PE  ) * N + EKF_X_PE  ]);
-    row.sigma_pos_d = sqrtf(ekf.P[(EKF_X_PD  ) * N + EKF_X_PD  ]);
-    row.sigma_vel_n = sqrtf(ekf.P[(EKF_X_VN  ) * N + EKF_X_VN  ]);
-    row.sigma_vel_e = sqrtf(ekf.P[(EKF_X_VE  ) * N + EKF_X_VE  ]);
-    row.sigma_vel_d = sqrtf(ekf.P[(EKF_X_VD  ) * N + EKF_X_VD  ]);
-    row.sigma_att_x = sqrtf(ekf.P[(EKF_X_DTHX) * N + EKF_X_DTHX]);
-    row.sigma_att_y = sqrtf(ekf.P[(EKF_X_DTHY) * N + EKF_X_DTHY]);
-    row.sigma_att_z = sqrtf(ekf.P[(EKF_X_DTHZ) * N + EKF_X_DTHZ]);
+    /* P stored as UDU' factor; reconstruct diagonals via ekf_P_diag().  */
+    row.sigma_pos_n = sqrtf(ekf_P_diag(EKF_X_PN  ));
+    row.sigma_pos_e = sqrtf(ekf_P_diag(EKF_X_PE  ));
+    row.sigma_pos_d = sqrtf(ekf_P_diag(EKF_X_PD  ));
+    row.sigma_vel_n = sqrtf(ekf_P_diag(EKF_X_VN  ));
+    row.sigma_vel_e = sqrtf(ekf_P_diag(EKF_X_VE  ));
+    row.sigma_vel_d = sqrtf(ekf_P_diag(EKF_X_VD  ));
+    row.sigma_att_x = sqrtf(ekf_P_diag(EKF_X_DTHX));
+    row.sigma_att_y = sqrtf(ekf_P_diag(EKF_X_DTHY));
+    row.sigma_att_z = sqrtf(ekf_P_diag(EKF_X_DTHZ));
     mlog_push_msg((uint8_t*)&row, INS_State_ID, sizeof(row));
 }
 
@@ -476,6 +477,7 @@ static void init_parameter(void)
     FMT_CHECK(param_link_variable(PARAM_GET(INS, EKF_GPS_ALT_NSE), &INS_PARAM.EKF_GPS_ALT_NSE));
     FMT_CHECK(param_link_variable(PARAM_GET(INS, EKF_BARO_NSE),    &INS_PARAM.EKF_BARO_NSE));
     FMT_CHECK(param_link_variable(PARAM_GET(INS, EKF_MAG_NSE),     &INS_PARAM.EKF_MAG_NSE));
+    FMT_CHECK(param_link_variable(PARAM_GET(INS, EKF_MAG_DECL),    &INS_PARAM.EKF_MAG_DECL));
     FMT_CHECK(param_link_variable(PARAM_GET(INS, EKF_RF_NSE),      &INS_PARAM.EKF_RF_NSE));
     FMT_CHECK(param_link_variable(PARAM_GET(INS, EKF_OPF_NSE),     &INS_PARAM.EKF_OPF_NSE));
     FMT_CHECK(param_link_variable(PARAM_GET(INS, EKF_EXT_POS_NSE), &INS_PARAM.EKF_EXT_POS_NSE));

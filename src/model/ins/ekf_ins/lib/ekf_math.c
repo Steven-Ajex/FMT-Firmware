@@ -68,26 +68,28 @@ void quat_rotate_vec(const real32_T q[4], const real32_T v_B[3], real32_T v_N[3]
     v_N[2] = R[6] * v_B[0] + R[7] * v_B[1] + R[8] * v_B[2];
 }
 
-void quat_integrate(real32_T q[4], const real32_T omega[3], real32_T dt)
+void quat_apply_rotvec(real32_T q[4], const real32_T alpha[3])
 {
-    /* First-order quaternion integration via the rotation vector formula:
-     *   q <- q * dq, where dq = [cos(|w|dt/2), sin(|w|dt/2)/|w| * w] */
-    real32_T wx = omega[0], wy = omega[1], wz = omega[2];
-    real32_T wn = sqrtf(wx * wx + wy * wy + wz * wz);
+    /* Apply a body-frame rotation vector alpha (radians) by exact
+     * exponential map:  q <- q * dq, where
+     *   dq = [cos(|a|/2),  sin(|a|/2)/|a| * a].
+     * For small |a| the sinc factor reduces to 1/2 (Taylor).            */
+    real32_T ax = alpha[0], ay = alpha[1], az = alpha[2];
+    real32_T an = sqrtf(ax * ax + ay * ay + az * az);
     real32_T dqw, dqx, dqy, dqz;
 
-    if (wn * dt < 1e-7f) {
+    if (an < 1e-7f) {
         dqw = 1.0f;
-        dqx = 0.5f * wx * dt;
-        dqy = 0.5f * wy * dt;
-        dqz = 0.5f * wz * dt;
+        dqx = 0.5f * ax;
+        dqy = 0.5f * ay;
+        dqz = 0.5f * az;
     } else {
-        real32_T half = 0.5f * wn * dt;
-        real32_T s    = sinf(half) / wn;
+        real32_T half = 0.5f * an;
+        real32_T s    = sinf(half) / an;
         dqw = cosf(half);
-        dqx = s * wx;
-        dqy = s * wy;
-        dqz = s * wz;
+        dqx = s * ax;
+        dqy = s * ay;
+        dqz = s * az;
     }
 
     real32_T qw = q[0], qx = q[1], qy = q[2], qz = q[3];
@@ -96,6 +98,13 @@ void quat_integrate(real32_T q[4], const real32_T omega[3], real32_T dt)
     q[2] = qw * dqy - qx * dqz + qy * dqw + qz * dqx;
     q[3] = qw * dqz + qx * dqy - qy * dqx + qz * dqw;
     quat_normalize(q);
+}
+
+void quat_integrate(real32_T q[4], const real32_T omega[3], real32_T dt)
+{
+    /* First-order integration: alpha = omega * dt (no coning).         */
+    real32_T alpha[3] = { omega[0] * dt, omega[1] * dt, omega[2] * dt };
+    quat_apply_rotvec(q, alpha);
 }
 
 void quat_inject_error(real32_T q[4], const real32_T dtheta[3])

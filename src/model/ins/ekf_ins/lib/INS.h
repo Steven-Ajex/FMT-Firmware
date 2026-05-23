@@ -250,6 +250,7 @@ typedef struct {
     real32_T EKF_GPS_ALT_NSE;
     real32_T EKF_BARO_NSE;
     real32_T EKF_MAG_NSE;
+    real32_T EKF_MAG_DECL;          /* magnetic declination, rad (E +) */
     real32_T EKF_RF_NSE;
     real32_T EKF_OPF_NSE;
     real32_T EKF_EXT_POS_NSE;

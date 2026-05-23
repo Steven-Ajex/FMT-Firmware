@@ -43,8 +43,10 @@ void ekf_mag_align_initial(void)
 
     quat_from_euler(ekf.q, phi, theta, psi);
 
-    /* P0 diagonal */
-    for (int i = 0; i < N * N; i++) ekf.P[i] = 0.0f;
+    /* Initial covariance is diagonal, so the UDU' factor is trivial:    *
+     *   U = I, D = diag of variances.                                   */
+    for (int i = 0; i < N * N; i++) ekf.U[i] = 0.0f;
+    for (int i = 0; i < N; i++) ekf.U[i * N + i] = 1.0f;
 
     real32_T pv = INS_PARAM.EKF_P0_POS  * INS_PARAM.EKF_P0_POS;
     real32_T vv = INS_PARAM.EKF_P0_VEL  * INS_PARAM.EKF_P0_VEL;
@@ -55,14 +57,14 @@ void ekf_mag_align_initial(void)
     real32_T tv = INS_PARAM.EKF_P0_TERR * INS_PARAM.EKF_P0_TERR;
 
     for (int i = 0; i < 3; i++) {
-        ekf.P[(EKF_X_PN   + i) * N + (EKF_X_PN   + i)] = pv;
-        ekf.P[(EKF_X_VN   + i) * N + (EKF_X_VN   + i)] = vv;
-        ekf.P[(EKF_X_DTHX + i) * N + (EKF_X_DTHX + i)] = av;
-        ekf.P[(EKF_X_BGX  + i) * N + (EKF_X_BGX  + i)] = bg;
-        ekf.P[(EKF_X_BAX  + i) * N + (EKF_X_BAX  + i)] = ba;
+        ekf.D[EKF_X_PN   + i] = pv;
+        ekf.D[EKF_X_VN   + i] = vv;
+        ekf.D[EKF_X_DTHX + i] = av;
+        ekf.D[EKF_X_BGX  + i] = bg;
+        ekf.D[EKF_X_BAX  + i] = ba;
     }
-    ekf.P[EKF_X_BARO_B * N + EKF_X_BARO_B] = bb;
-    ekf.P[EKF_X_TERR   * N + EKF_X_TERR]   = tv;
+    ekf.D[EKF_X_BARO_B] = bb;
+    ekf.D[EKF_X_TERR]   = tv;
 
     ekf.init_done = 1;
 }
@@ -88,11 +90,14 @@ int ekf_update_mag_heading(void)
     real32_T mn[3];
     quat_rotate_vec(ekf.q, mb, mn);
 
-    real32_T psi_meas = atan2f(-mn[1], mn[0]);
-    real32_T phi, theta, psi_pred;
-    quat_to_euler(ekf.q, &phi, &theta, &psi_pred);
-
-    real32_T innov = ekf_wrap_pi(psi_meas - psi_pred);
+    /* mn = R(q_e) * mb = R(psi_e - psi_t) * [|B_h|*cos(D), |B_h|*sin(D), B_d],
+     * where D is magnetic declination (E +).  Then
+     *   atan2(-mn[1], mn[0]) = -(psi_e - psi_t + D) = (psi_t - psi_e) - D.
+     * Adding D back yields the pure yaw error (psi_t - psi_e), making the
+     * filter converge to true yaw rather than magnetic yaw.  (Earlier
+     * code subtracted psi_pred as well, which made it converge to
+     * psi_t/2 — see test1-test5 logs.) */
+    real32_T innov = ekf_wrap_pi(atan2f(-mn[1], mn[0]) + INS_PARAM.EKF_MAG_DECL);
 
     real32_T H[N] = { 0.0f };
     H[EKF_X_DTHZ] = 1.0f;

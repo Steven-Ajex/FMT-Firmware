@@ -28,6 +28,7 @@
 #include "ekf_optflow.h"
 #include "ekf_extpos.h"
 #include "ekf_health.h"
+#include "ekf_mahony.h"
 
 INS_U_T      INS_U;
 INS_Y_T      INS_Y;
@@ -76,7 +77,8 @@ static void ekf_load_defaults(void)
     INS_PARAM.EKF_GPS_VEL_NSE = 0.3f;
     INS_PARAM.EKF_GPS_ALT_NSE = 1.5f;
     INS_PARAM.EKF_BARO_NSE    = 2.0f;
-    INS_PARAM.EKF_MAG_NSE     = 0.05f;
+    INS_PARAM.EKF_MAG_NSE     = 0.15f;
+    INS_PARAM.EKF_MAG_DECL    = 0.0f;     /* set per location, rad (E +) */
     INS_PARAM.EKF_RF_NSE      = 0.1f;
     INS_PARAM.EKF_OPF_NSE     = 0.2f;
     INS_PARAM.EKF_EXT_POS_NSE = 0.05f;
@@ -109,6 +111,10 @@ void ekf_state_reset(void)
 {
     memset(&ekf, 0, sizeof(ekf));
     ekf.q[0] = 1.0f;
+    /* UDU' initial: U = I, D = 0 (D is filled in by ekf_mag_align_initial). */
+    for (int i = 0; i < EKF_NSTATES; i++) {
+        ekf.U[i * EKF_NSTATES + i] = 1.0f;
+    }
     ekf.dt   = (real32_T)INS_EXPORT.period * 1.0e-3f;
     s_last_mag_ts = s_last_gps_ts = s_last_baro_ts = 0U;
     s_last_rf_ts  = s_last_opf_ts = s_last_ext_ts  = 0U;
@@ -208,6 +214,7 @@ void INS_init(void)
     ekf_load_defaults();
     ekf_state_reset();
     ekf_health_init();
+    ekf_mahony_reset();   /* Path B: background reference observer */
     INS_Y.INS_Out.quat[0] = 1.0f;
 }
 
@@ -230,6 +237,9 @@ void INS_step(void)
     real32_T omega[3] = { INS_U.IMU.gyr_x, INS_U.IMU.gyr_y, INS_U.IMU.gyr_z };
     real32_T accel[3] = { INS_U.IMU.acc_x, INS_U.IMU.acc_y, INS_U.IMU.acc_z };
     ekf_predict(omega, accel, ekf.dt);
+
+    /* ---- Path B: background Mahony reference (attitude-only, no fb) ---- */
+    ekf_mahony_step(ekf.dt);
 
     /* ---- gravity tilt update (per-step, gated by |f| ≈ g) ---- */
     ekf_update_gravity();
@@ -264,6 +274,42 @@ void INS_step(void)
         if (ekf_health_available(EKF_SENS_EXT)) {
             ekf_update_extpos();
             ekf_update_extatt();
+        }
+    }
+
+    /* ---- Path A/B: filter-health self-recovery ---------------------- *
+     * Two complementary triggers:                                       *
+     *   1. Gating starvation - same-tag rejection count exceeds the     *
+     *      hard threshold (adaptive gate widening alone cannot let any  *
+     *      observation through).                                        *
+     *   2. EKF vs background Mahony disagreement larger than 25 deg     *
+     *      sustained for ~1 s.  Mahony has no gate so it tracks the     *
+     *      truth even when the EKF goes off the rails; this is the      *
+     *      condition that catches the slow-bias-induced drift seen in   *
+     *      log/20260519/ekf_test8 (phi grows linearly past 60s).        */
+    {
+        int grav_x_id = ekf_innov_tag_to_id("grav_x");
+        int grav_y_id = ekf_innov_tag_to_id("grav_y");
+        int fx = (grav_x_id >= 0) ? ekf_innov_fail_count(grav_x_id) : 0;
+        int fy = (grav_y_id >= 0) ? ekf_innov_fail_count(grav_y_id) : 0;
+
+        static uint32_T s_disagree_streak = 0;
+        const real32_T DISAGREE_RAD = 0.4363f;       /* 25 deg          */
+        const uint32_T DISAGREE_STREAK_NEEDED = 200; /* ~1 s at 200 Hz  */
+        real32_T disagree = ekf_mahony_disagreement_rad();
+        if (disagree > DISAGREE_RAD) s_disagree_streak++;
+        else                         s_disagree_streak = 0;
+
+        int starved = (fx > 100 || fy > 100);
+        int slow_drift = (s_disagree_streak > DISAGREE_STREAK_NEEDED);
+
+        if (starved || slow_drift) {
+            if (ekf_attitude_reset_from_accel(/*use_mag=*/1)) {
+                /* Also re-seed Mahony so the disagreement metric starts *
+                 * fresh and we don't immediately retrigger.             */
+                ekf_mahony_reset();
+                s_disagree_streak = 0;
+            }
         }
     }
 
