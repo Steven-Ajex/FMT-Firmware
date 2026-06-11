@@ -136,6 +136,42 @@ static void handle_mavlink_command(mavlink_command_long_t* command, mavlink_mess
         mavlink_command_acknowledge(MAVPROXY_GCS_CHAN, command->command, MAV_RESULT_ACCEPTED);
     } break;
 
+#ifdef DEFINED_TYPEDEF_FOR_VTOLMode_
+    case MAV_CMD_DO_VTOL_TRANSITION: {
+        /* param1 carries the target MAV_VTOL_STATE, only MC(3) and FW(4) are valid.
+         * The vtol FMS listens for value changes of Pilot_Cmd.cmd_2 (VTOLMode),
+         * which is normally driven by an RC status switch. Publish a virtual pilot
+         * command carrying the requested mode, the same mechanism used to inject
+         * MANUAL_CONTROL as virtual joystick data. */
+        uint32_t rc_last_pub_timestamp = pilot_cmd_get_last_pub_timestamp();
+        uint32_t time_now = systime_now_ms();
+
+        if ((time_now - rc_last_pub_timestamp) < 1000) {
+            /* physical RC is active and its vtol switch owns Pilot_Cmd.cmd_2 */
+            mavlink_command_acknowledge(MAVPROXY_GCS_CHAN, command->command, MAV_RESULT_TEMPORARILY_REJECTED);
+        } else if (command->param1 == MAV_VTOL_STATE_MC || command->param1 == MAV_VTOL_STATE_FW) {
+            Pilot_Cmd_Bus pilot_cmd = { 0 };
+
+            if (mcn_copy_from_hub(MCN_HUB(pilot_cmd), &pilot_cmd) != FMT_EOK) {
+                GCS_Cmd_Bus gcs_cmd;
+                if (mcn_copy_from_hub(MCN_HUB(gcs_cmd), &gcs_cmd) == FMT_EOK) {
+                    pilot_cmd.mode = gcs_cmd.mode;
+                } else {
+                    pilot_cmd.mode = PilotMode_None;
+                }
+            }
+
+            pilot_cmd.timestamp = time_now;
+            pilot_cmd.cmd_2 = (command->param1 == MAV_VTOL_STATE_FW) ? VTOLMode_Fixwing : VTOLMode_Multicopter;
+            mcn_publish(MCN_HUB(pilot_cmd), &pilot_cmd);
+
+            mavlink_command_acknowledge(MAVPROXY_GCS_CHAN, command->command, MAV_RESULT_ACCEPTED);
+        } else {
+            mavlink_command_acknowledge(MAVPROXY_GCS_CHAN, command->command, MAV_RESULT_DENIED);
+        }
+    } break;
+#endif /* DEFINED_TYPEDEF_FOR_VTOLMode_ */
+
     case MAV_CMD_DO_SET_HOME: {
         mavlink_command_acknowledge(MAVPROXY_GCS_CHAN, command->command, MAV_RESULT_ACCEPTED);
     } break;

@@ -141,7 +141,11 @@ bool mavlink_msg_heartbeat_pack_func(mavlink_message_t* msg_t)
     mavlink_heartbeat_t heartbeat = { 0 };
     FMS_Out_Bus fms_out = { 0 };
 
+#ifdef DEFINED_TYPEDEF_FOR_VTOLMode_
+    heartbeat.type = MAV_TYPE_VTOL_QUADROTOR;
+#else
     heartbeat.type = MAV_TYPE_QUADROTOR;
+#endif
     heartbeat.autopilot = MAV_AUTOPILOT_PX4;
     heartbeat.base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
     heartbeat.custom_mode = 0;
@@ -182,6 +186,28 @@ bool mavlink_msg_extended_sys_state_pack_func(mavlink_message_t* msg_t)
             ext_sys_state.landed_state = MAV_LANDED_STATE_IN_AIR;
         }
     }
+
+#ifdef DEFINED_TYPEDEF_FOR_VTOLState_
+    /* the vtol FMS reports its VTOLState via ext_state */
+    switch ((VTOLState)fms_out.ext_state) {
+    case VTOLState_Multicopter:
+        ext_sys_state.vtol_state = MAV_VTOL_STATE_MC;
+        break;
+    case VTOLState_ForwardTrans:
+        ext_sys_state.vtol_state = MAV_VTOL_STATE_TRANSITION_TO_FW;
+        break;
+    case VTOLState_Fixwing:
+    case VTOLState_Stall:
+        ext_sys_state.vtol_state = MAV_VTOL_STATE_FW;
+        break;
+    case VTOLState_BackwardTrans:
+        ext_sys_state.vtol_state = MAV_VTOL_STATE_TRANSITION_TO_MC;
+        break;
+    default:
+        ext_sys_state.vtol_state = MAV_VTOL_STATE_UNDEFINED;
+        break;
+    }
+#endif /* DEFINED_TYPEDEF_FOR_VTOLState_ */
 
     mavlink_msg_extended_sys_state_encode(mavlink_system.sysid, mavlink_system.compid, msg_t, &ext_sys_state);
 
