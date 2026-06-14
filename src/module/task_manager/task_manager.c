@@ -104,7 +104,7 @@ void task_manager_init(void)
 
     task_tid = (rt_thread_t*)rt_malloc(task_num * sizeof(rt_thread_t));
     RT_ASSERT(task_tid != NULL);
-    memset(task_tid, 0, sizeof(rt_thread_t));
+    memset(task_tid, 0, task_num * sizeof(rt_thread_t));
 
     for (uint32_t i = 0; i < task_num; i++) {
         RT_ASSERT(task_table[i].name != NULL);
@@ -112,28 +112,52 @@ void task_manager_init(void)
         RT_ASSERT(task_table[i].entry != NULL);
     }
 
+    /* Resolve each task's dependency names to task indices once, so the init
+     * loop below does not repeat string comparisons on every pass. dep_idx[i]
+     * is a (-1)-terminated list of depended task indices (an entry of -1 from
+     * get_task_id() means the dependency name is unknown and is ignored, as in
+     * the original behaviour). */
+    int32_t** dep_idx = (int32_t**)rt_malloc(task_num * sizeof(int32_t*));
+    RT_ASSERT(dep_idx != NULL);
+    for (uint32_t i = 0; i < task_num; i++) {
+        uint32_t ndep = 0;
+        while (task_table[i].dependency != NULL && task_table[i].dependency[ndep] != NULL) {
+            ndep++;
+        }
+        dep_idx[i] = (int32_t*)rt_malloc((ndep + 1) * sizeof(int32_t));
+        RT_ASSERT(dep_idx[i] != NULL);
+        for (uint32_t n = 0; n < ndep; n++) {
+            dep_idx[i][n] = get_task_id(task_table[i].dependency[n]);
+        }
+        dep_idx[i][ndep] = -1;
+    }
+
     /* wait all task has been initialized or init timeout */
     while (init_done < task_num && (systime_now_ms() - time_start_init) < MAX_INIT_TIME) {
         for (uint32_t i = 0; i < task_num; i++) {
+            if (task_status[i] != TASK_IDLE) {
+                continue;
+            }
+
             uint8_t depend_met = 1;
 
             /* check task dependency */
-            for (uint32_t n = 0; task_table[i].dependency != NULL && task_table[i].dependency[n] != NULL; n++) {
-                for (uint32_t k = 0; k < task_num; k++) {
-                    /* find depended task */
-                    if (strcmp(task_table[i].dependency[n], task_table[k].name) == 0) {
-                        if (task_status[k] == TASK_IDLE) {
-                            /* wait the depended task to be initialized */
-                            depend_met = 0;
-                            break;
-                        } else if (task_status[k] == TASK_FAIL) {
-                            /* if the depended task failed, then the related task fails as well */
-                            depend_met = 0;
-                            task_status[i] = TASK_FAIL;
-                            /* increase init task count */
-                            init_done++;
-                        }
-                    }
+            for (uint32_t n = 0; dep_idx[i][n] != -1; n++) {
+                int32_t k = dep_idx[i][n];
+                if (k < 0) {
+                    continue;
+                }
+                if (task_status[k] == TASK_FAIL) {
+                    /* if the depended task failed, then the related task fails
+                     * as well; count it once and stop checking */
+                    depend_met = 0;
+                    task_status[i] = TASK_FAIL;
+                    init_done++;
+                    break;
+                } else if (task_status[k] == TASK_IDLE) {
+                    /* wait the depended task to be initialized, but keep
+                     * scanning in case a later dependency has already failed */
+                    depend_met = 0;
                 }
             }
 
@@ -158,6 +182,11 @@ void task_manager_init(void)
             }
         }
     }
+
+    for (uint32_t i = 0; i < task_num; i++) {
+        rt_free(dep_idx[i]);
+    }
+    rt_free(dep_idx);
 }
 
 /**
