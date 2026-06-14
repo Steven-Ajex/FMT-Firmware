@@ -84,7 +84,10 @@ void task_vehicle_entry(void* parameter)
                 uint64_t wcet_start = systime_now_us();
 #endif
 
-#if !defined(FMT_USING_HIL) && !defined(FMT_USING_SIH)
+#if !defined(FMT_USING_HIL) && !defined(FMT_USING_SIH) && !defined(FMT_USING_SENSOR_TASK)
+                /* When FMT_USING_SENSOR_TASK is defined, sampling runs in the
+                 * dedicated sensor task and the control loop just consumes the
+                 * latest published data via uMCN. */
                 sensor_collect();
 #endif
                 pilot_cmd_collect();

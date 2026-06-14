@@ -27,6 +27,7 @@ extern "C" {
 #define FMT_VERSION                "v1.1.3"
 
 /* Thread Prority */
+#define SENSOR_THREAD_PRIORITY     2
 #define VEHICLE_THREAD_PRIORITY    3
 #define FMTIO_THREAD_PRIORITY      7
 #define DRONECAN_THREAD_PRIORITY   4
