@@ -32,15 +32,19 @@ static void mcn_freq_est_entry(void* parameter)
             break;
         }
 
+        /* Serialize window access with publishers, otherwise the window slot
+         * increment in mcn_publish() can race with the window move/reset here. */
+        MCN_ENTER_CRITICAL;
         /* calculate publish frequency */
         uint32_t cnt = 0;
         for (int i = 0; i < MCN_FREQ_EST_WINDOW_LEN; i++) {
             cnt += hub->freq_est_window[i];
-            hub->freq = (float)cnt / MCN_FREQ_EST_WINDOW_LEN;
         }
+        hub->freq = (float)cnt / MCN_FREQ_EST_WINDOW_LEN;
         /* move window */
         hub->window_index = (hub->window_index + 1) % MCN_FREQ_EST_WINDOW_LEN;
         hub->freq_est_window[hub->window_index] = 0;
+        MCN_EXIT_CRITICAL;
     }
 }
 
@@ -351,6 +355,11 @@ fmt_err_t mcn_unsubscribe(McnHub_t hub, McnNode_t node)
     MCN_ASSERT(hub != NULL);
     MCN_ASSERT(node != NULL);
 
+    /* Find and unlink the node atomically so a concurrent (un)subscribe cannot
+     * corrupt the traversal. The node is freed after leaving the critical
+     * section. */
+    MCN_ENTER_CRITICAL;
+
     /* traverse each node */
     McnNode_t cur_node = hub->link_head;
     McnNode_t pre_node = NULL;
@@ -367,11 +376,9 @@ fmt_err_t mcn_unsubscribe(McnHub_t hub, McnNode_t node)
 
     if (cur_node == NULL) {
         /* can not find */
+        MCN_EXIT_CRITICAL;
         return FMT_EEMPTY;
     }
-
-    /* update list */
-    MCN_ENTER_CRITICAL;
 
     if (hub->link_num == 1) {
         hub->link_head = hub->link_tail = NULL;
@@ -419,10 +426,10 @@ fmt_err_t mcn_publish(McnHub_t hub, const void* data)
         return FMT_ENOTHANDLE;
     }
 
-    /* update freq estimator window */
-    hub->freq_est_window[hub->window_index]++;
-
     MCN_ENTER_CRITICAL;
+    /* update freq estimator window (inside critical section to avoid a torn
+     * increment and a race with the freq estimator timer moving the window) */
+    hub->freq_est_window[hub->window_index]++;
     /* copy data to hub */
     memcpy(hub->pdata, data, hub->obj_size);
     /* traverse each node */
@@ -450,11 +457,13 @@ fmt_err_t mcn_publish(McnHub_t hub, const void* data)
     }
 
     if (hub->event) {
-        /* send out event to wakeup waiting task */
+        /* Wake up all pending subscribers, then clear the event bit so it does
+         * not stay latched for the next mcn_wait(). The send and clear are kept
+         * atomic w.r.t. concurrent publishers via the scheduler lock. */
+        MCN_ENTER_CRITICAL;
         rt_event_send(hub->event, MCN_PUB_EVENT);
-
-        /* clear event set after wake-up all pending subscriber */
         hub->event->set &= ~MCN_PUB_EVENT;
+        MCN_EXIT_CRITICAL;
     }
 
     return FMT_EOK;
