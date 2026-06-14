@@ -31,11 +31,27 @@
 
 #define EVENT_VEHICLE_UPDATE (1 << 0)
 
+/* Control loop tick period (ms). Must match the timer period below. */
+#define VEHICLE_LOOP_PERIOD_MS 1
+
+/* Worst-case execution time (WCET) monitoring of the control pipeline. The
+ * cost is two timestamp reads per tick; disable by defining this to 0. */
+#ifndef FMT_VEHICLE_WCET_MONITOR
+#define FMT_VEHICLE_WCET_MONITOR 1
+#endif
+
 extern rt_device_t main_out_dev;
 extern rt_device_t aux_out_dev;
 
 static struct rt_timer timer_vehicle;
 static struct rt_event event_vehicle;
+
+#if FMT_VEHICLE_WCET_MONITOR
+/* Exposed (non-static) so they can be inspected from a debugger or console. */
+uint32_t vehicle_loop_wcet_us = 0;   /* max observed pipeline execution time  */
+uint32_t vehicle_loop_last_us = 0;   /* last pipeline execution time          */
+uint32_t vehicle_loop_overrun_cnt = 0; /* times the pipeline exceeded budget  */
+#endif
 
 static void timer_vehicle_update(void* parameter)
 {
@@ -64,6 +80,10 @@ void task_vehicle_entry(void* parameter)
                 /* the model simulation start from 0, so we calcualtet the timestamp relative to start time */
                 timestamp = time_now - time_start;
 
+#if FMT_VEHICLE_WCET_MONITOR
+                uint64_t wcet_start = systime_now_us();
+#endif
+
 #if !defined(FMT_USING_HIL) && !defined(FMT_USING_SIH)
                 sensor_collect();
 #endif
@@ -84,6 +104,23 @@ void task_vehicle_entry(void* parameter)
 
                 /* send actuator command */
                 send_actuator_cmd();
+
+#if FMT_VEHICLE_WCET_MONITOR
+                vehicle_loop_last_us = (uint32_t)(systime_now_us() - wcet_start);
+                if (vehicle_loop_last_us > vehicle_loop_wcet_us) {
+                    vehicle_loop_wcet_us = vehicle_loop_last_us;
+                }
+                /* The pipeline must finish within one tick or the control loop
+                 * falls behind. Count and rate-limit a warning on overrun. */
+                if (vehicle_loop_last_us > VEHICLE_LOOP_PERIOD_MS * 1000) {
+                    vehicle_loop_overrun_cnt++;
+                    PERIOD_EXECUTE(wcet_warn, 1000,
+                        console_printf("[vehicle] control loop overrun: %lu us (budget %u us), total %lu\n",
+                            (unsigned long)vehicle_loop_last_us,
+                            VEHICLE_LOOP_PERIOD_MS * 1000,
+                            (unsigned long)vehicle_loop_overrun_cnt););
+                }
+#endif
             }
         }
     }
