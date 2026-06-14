@@ -57,6 +57,11 @@ struct mcn_hub {
 struct mcn_node {
     McnHub_t hub;
     volatile uint8_t renewal;
+    /* When async is set, pub_cb is invoked from the uMCN dispatcher thread
+     * instead of synchronously in the publisher's context. cb_pending marks a
+     * queued async callback. */
+    uint8_t async;
+    volatile uint8_t cb_pending;
     void (*pub_cb)(void* parameter);
     McnNode_t next;
 };
@@ -91,6 +96,9 @@ struct mcn_list {
 fmt_err_t mcn_init(void);
 fmt_err_t mcn_advertise(McnHub_t hub, int (*echo)(void* parameter));
 McnNode_t mcn_subscribe(McnHub_t hub, void (*pub_cb)(void* parameter));
+/* Same as mcn_subscribe(), but pub_cb runs in the uMCN dispatcher thread so a
+ * slow callback does not stall the (possibly high-rate) publisher. */
+McnNode_t mcn_subscribe_async(McnHub_t hub, void (*pub_cb)(void* parameter));
 fmt_err_t mcn_unsubscribe(McnHub_t hub, McnNode_t node);
 fmt_err_t mcn_publish(McnHub_t hub, const void* data);
 bool mcn_poll(McnNode_t node_t);

@@ -16,8 +16,89 @@
 #include <firmament.h>
 #include <string.h>
 
+/* Priority of the async callback dispatcher thread. Kept below the control
+ * task but above the telemetry tasks so async callbacks are serviced promptly
+ * without disturbing the flight loop. */
+#define MCN_DISPATCH_THREAD_PRIORITY  8
+#define MCN_DISPATCH_THREAD_STACK     2048
+
 static McnList __mcn_list = { .hub = NULL, .next = NULL };
 static struct rt_timer timer_mcn_freq_est;
+
+/* Lazily created when the first async subscriber is registered. */
+static rt_sem_t mcn_dispatch_sem = NULL;
+static rt_thread_t mcn_dispatch_tid = NULL;
+
+/**
+ * @brief Async callback dispatcher thread entry
+ *
+ * Runs the callbacks of async subscribers outside of the publisher context so
+ * that a slow callback cannot stall a high-rate publisher (e.g. 1 kHz IMU).
+ */
+static void mcn_dispatch_entry(void* parameter)
+{
+    (void)parameter;
+
+    while (1) {
+        rt_sem_take(mcn_dispatch_sem, RT_WAITING_FOREVER);
+
+        /* scan all hubs for pending async callbacks */
+        for (McnList_t cp = &__mcn_list; cp != NULL; cp = cp->next) {
+            McnHub_t hub = cp->hub;
+            if (hub == NULL) {
+                break;
+            }
+
+            McnNode_t node = hub->link_head;
+            while (node != NULL) {
+                uint8_t pending = 0;
+
+                MCN_ENTER_CRITICAL;
+                if (node->async && node->cb_pending) {
+                    node->cb_pending = 0;
+                    pending = 1;
+                }
+                MCN_EXIT_CRITICAL;
+
+                if (pending && node->pub_cb != NULL) {
+                    node->pub_cb(hub->pdata);
+                }
+
+                node = node->next;
+            }
+        }
+    }
+}
+
+/**
+ * @brief Lazily create and start the async dispatcher thread
+ *
+ * @return fmt_err_t FMT_EOK indicates success
+ */
+static fmt_err_t mcn_dispatcher_start(void)
+{
+    if (mcn_dispatch_tid != NULL) {
+        return FMT_EOK;
+    }
+
+    mcn_dispatch_sem = rt_sem_create("mcn_disp", 0, RT_IPC_FLAG_FIFO);
+    if (mcn_dispatch_sem == NULL) {
+        return FMT_ENOMEM;
+    }
+
+    mcn_dispatch_tid = rt_thread_create("mcn_disp", mcn_dispatch_entry, NULL,
+                                        MCN_DISPATCH_THREAD_STACK,
+                                        MCN_DISPATCH_THREAD_PRIORITY, 5);
+    if (mcn_dispatch_tid == NULL) {
+        rt_sem_delete(mcn_dispatch_sem);
+        mcn_dispatch_sem = NULL;
+        return FMT_ERROR;
+    }
+
+    rt_thread_startup(mcn_dispatch_tid);
+
+    return FMT_EOK;
+}
 
 /**
  * @brief Topic publish frequency estimator entry
@@ -296,13 +377,21 @@ fmt_err_t mcn_advertise(McnHub_t hub, int (*echo)(void* parameter))
  * @param pub_cb Topic published callback function
  * @return McnNode_t Subscribe node, return NULL if fail
  */
-McnNode_t mcn_subscribe(McnHub_t hub, void (*pub_cb)(void* parameter))
+static McnNode_t __mcn_subscribe(McnHub_t hub, void (*pub_cb)(void* parameter), uint8_t async)
 {
     MCN_ASSERT(hub != NULL);
 
     if (hub->link_num >= MCN_MAX_LINK_NUM) {
         printf("mcn link num is already full!\n");
         return NULL;
+    }
+
+    if (async) {
+        /* ensure the dispatcher thread exists before linking the node */
+        if (mcn_dispatcher_start() != FMT_EOK) {
+            printf("mcn dispatcher start fail!\n");
+            return NULL;
+        }
     }
 
     McnNode_t node = (McnNode_t)MCN_MALLOC(sizeof(McnNode));
@@ -314,6 +403,8 @@ McnNode_t mcn_subscribe(McnHub_t hub, void (*pub_cb)(void* parameter))
 
     node->hub = hub;
     node->renewal = 0;
+    node->async = async;
+    node->cb_pending = 0;
     node->pub_cb = pub_cb;
     node->next = NULL;
 
@@ -341,6 +432,16 @@ McnNode_t mcn_subscribe(McnHub_t hub, void (*pub_cb)(void* parameter))
     }
 
     return node;
+}
+
+McnNode_t mcn_subscribe(McnHub_t hub, void (*pub_cb)(void* parameter))
+{
+    return __mcn_subscribe(hub, pub_cb, 0);
+}
+
+McnNode_t mcn_subscribe_async(McnHub_t hub, void (*pub_cb)(void* parameter))
+{
+    return __mcn_subscribe(hub, pub_cb, 1);
 }
 
 /**
@@ -447,13 +548,24 @@ fmt_err_t mcn_publish(McnHub_t hub, const void* data)
 
     /* invoke callback func */
     node = hub->link_head;
+    uint8_t async_pending = 0;
 
     while (node != NULL) {
         if (node->pub_cb != NULL) {
-            node->pub_cb(hub->pdata);
+            if (node->async) {
+                /* defer to the dispatcher thread */
+                node->cb_pending = 1;
+                async_pending = 1;
+            } else {
+                node->pub_cb(hub->pdata);
+            }
         }
 
         node = node->next;
+    }
+
+    if (async_pending && mcn_dispatch_sem != NULL) {
+        rt_sem_release(mcn_dispatch_sem);
     }
 
     if (hub->event) {
