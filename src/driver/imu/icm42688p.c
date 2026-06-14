@@ -21,13 +21,12 @@
 
 #define DRV_DBG(...)
 
+/* Drop any pre-existing BIT macro so imu_reg.h can define the canonical one. */
 #ifdef BIT
     #undef BIT
 #endif
 
-#define BIT(_idx) (1 << _idx)
-#define REG_VAL(_setbits, _clearbits) \
-    (reg_val_t) { .setbits = (_setbits), .clearbits = (_clearbits) }
+#include "driver/imu/imu_reg.h"
 
 #define DEVICE_ID                0x47
 
@@ -127,11 +126,6 @@
             ACCEL_RANGE_16G, /* +-16g */           \
     }
 
-typedef struct {
-    uint8_t setbits;
-    uint8_t clearbits;
-} reg_val_t;
-
 static rt_device_t spi_dev;
 static float gyro_range_scale;
 static float accel_range_scale;
@@ -143,30 +137,6 @@ RT_WEAK void icm42688_rotate_to_frd(float* data, uint8_t dev_id)
     /* do nothing */
     (void)data;
     (void)dev_id;
-}
-
-static rt_err_t __write_checked_reg(rt_device_t spi_device, rt_uint8_t reg, rt_uint8_t val)
-{
-    rt_uint8_t r_val;
-
-    RT_TRY(spi_write_reg8(spi_device, reg, val));
-    RT_TRY(spi_read_reg8(spi_device, reg, &r_val));
-
-    return (r_val == val) ? RT_EOK : RT_ERROR;
-}
-
-static rt_err_t __modify_reg(rt_device_t spi_device, rt_uint8_t reg, reg_val_t reg_val)
-{
-    uint8_t value;
-
-    RT_TRY(spi_read_reg8(spi_device, reg, &value));
-
-    value &= ~reg_val.clearbits;
-    value |= reg_val.setbits;
-
-    RT_TRY(__write_checked_reg(spi_device, reg, value));
-
-    return RT_EOK;
 }
 
 static rt_err_t gyro_set_range(uint32_t max_dps)

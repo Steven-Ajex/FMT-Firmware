@@ -20,6 +20,7 @@
 #include "hal/accel/accel.h"
 #include "hal/gyro/gyro.h"
 #include "hal/spi/spi.h"
+#include "driver/imu/imu_reg.h"
 #include "module/math/conversion.h"
 
 #define DRV_DBG(...) printf(__VA_ARGS__)
@@ -28,10 +29,6 @@
 #define DIR_WRITE      0x00
 #define ICM20689_ONE_G 9.80665f
 #define M_PI_F         3.1415926f
-
-#define BIT(_idx) (1 << _idx)
-#define REG_VAL(_setbits, _clearbits) \
-    (reg_val_t) { .setbits = (_setbits), .clearbits = (_clearbits) }
 
 #define SELF_TEST_X_GYRO  0x00
 #define SELF_TEST_Y_GYRO  0x01
@@ -101,11 +98,6 @@
 #define ACCEL_BW_218_1 REG_VAL(BIT(0), BIT(1) | BIT(2))
 #define ACCEL_BW_420   REG_VAL(BIT(0) | BIT(1) | BIT(2), 0)
 
-typedef struct {
-    uint8_t setbits;
-    uint8_t clearbits;
-} reg_val_t;
-
 static float gyro_range_scale;
 static float accel_range_scale;
 static rt_device_t imu_spi_dev;
@@ -116,30 +108,6 @@ RT_WEAK void icm20689_rotate_to_frd(float* data, uint8_t dev_id)
     /* do nothing */
     (void)data;
     (void)dev_id;
-}
-
-static rt_err_t __write_checked_reg(rt_device_t spi_device, rt_uint8_t reg, rt_uint8_t val)
-{
-    rt_uint8_t r_val;
-
-    RT_TRY(spi_write_reg8(spi_device, reg, val));
-    RT_TRY(spi_read_reg8(spi_device, reg, &r_val));
-
-    return (r_val == val) ? RT_EOK : RT_ERROR;
-}
-
-static rt_err_t __modify_reg(rt_device_t spi_device, rt_uint8_t reg, reg_val_t reg_val)
-{
-    uint8_t value;
-
-    RT_TRY(spi_read_reg8(spi_device, reg, &value));
-
-    value &= ~reg_val.clearbits;
-    value |= reg_val.setbits;
-
-    RT_TRY(__write_checked_reg(spi_device, reg, value));
-
-    return RT_EOK;
 }
 
 static rt_err_t gyro_set_dlpf_filter(uint32_t frequency_hz)
