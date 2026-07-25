@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT Control Stack Reader"
+  short_description: "Trace FMT control-stack data flow end-to-end"
+  default_prompt: "Use $fmt-control-stack-reader to trace the FMT control stack end-to-end."

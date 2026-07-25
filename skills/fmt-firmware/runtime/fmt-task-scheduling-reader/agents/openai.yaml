@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT Task Scheduling Reader"
+  short_description: "Inspect FMT task registration and scheduling"
+  default_prompt: "Use $fmt-task-scheduling-reader to analyze FMT task registration and scheduling."

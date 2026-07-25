@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT Controller Structure Reader"
+  short_description: "Analyze FMT mc_controller loop structure"
+  default_prompt: "Use $fmt-controller-structure-reader to analyze the FMT mc_controller loop structure."

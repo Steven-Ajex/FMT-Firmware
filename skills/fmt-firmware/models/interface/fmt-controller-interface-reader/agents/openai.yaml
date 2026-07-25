@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT Controller Interface Reader"
+  short_description: "Inspect FMT controller topics and boundary"
+  default_prompt: "Use $fmt-controller-interface-reader to inspect the FMT controller firmware boundary."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT FMS State Machine Reader"
+  short_description: "Analyze FMT mc_fms state-machine transitions"
+  default_prompt: "Use $fmt-fms-state-machine-reader to analyze FMT mc_fms state-machine transitions."

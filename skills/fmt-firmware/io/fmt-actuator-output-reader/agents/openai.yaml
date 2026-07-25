@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT Actuator Output Reader"
+  short_description: "Inspect FMT actuator output mapping"
+  default_prompt: "Use $fmt-actuator-output-reader to inspect how FMT control outputs map to actuators."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT System Topdown Reader"
+  short_description: "Top-down walkthrough of FMT firmware"
+  default_prompt: "Use $fmt-system-topdown-reader to explain FMT from target assembly to actuator output."

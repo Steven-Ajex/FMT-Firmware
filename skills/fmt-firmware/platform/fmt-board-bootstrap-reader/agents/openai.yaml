@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT Board Bootstrap Reader"
+  short_description: "Inspect FMT board bring-up and post init"
+  default_prompt: "Use $fmt-board-bootstrap-reader to inspect FMT board bring-up and post initialization."

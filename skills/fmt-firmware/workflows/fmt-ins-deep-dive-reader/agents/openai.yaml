@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT INS Deep Dive Reader"
+  short_description: "Deep analysis of FMT INS inputs and navigation"
+  default_prompt: "Use $fmt-ins-deep-dive-reader to analyze FMT INS inputs and navigation outputs in detail."

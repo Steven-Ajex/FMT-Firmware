@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT Sensor Pipeline Reader"
+  short_description: "Inspect FMT sensor data path to topics"
+  default_prompt: "Use $fmt-sensor-pipeline-reader to trace sensor data from drivers to FMT topics."

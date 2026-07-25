@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT FMS Deep Dive Reader"
+  short_description: "Deep analysis of FMT FMS states and commands"
+  default_prompt: "Use $fmt-fms-deep-dive-reader to analyze FMT FMS state transitions and command generation."

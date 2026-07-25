@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT INS CF Navigation Reader"
+  short_description: "Analyze default FMT cf_ins navigation solving"
+  default_prompt: "Use $fmt-ins-cf-navigation-reader to analyze the default FMT cf_ins navigation algorithm."

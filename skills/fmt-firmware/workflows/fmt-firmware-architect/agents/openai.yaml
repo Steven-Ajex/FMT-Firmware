@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT Firmware Architect"
+  short_description: "Route FMT firmware architecture analysis"
+  default_prompt: "Use $fmt-firmware-architect to route this FMT firmware analysis task."

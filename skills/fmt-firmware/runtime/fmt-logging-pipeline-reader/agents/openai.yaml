@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT Logging Pipeline Reader"
+  short_description: "Inspect FMT mlog, ulog, and logger task"
+  default_prompt: "Use $fmt-logging-pipeline-reader to inspect the FMT logging pipeline."

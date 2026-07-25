@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT Runtime Infrastructure Reader"
+  short_description: "Inspect FMT runtime scheduling, bus, logs"
+  default_prompt: "Use $fmt-runtime-infrastructure-reader to analyze FMT runtime infrastructure."

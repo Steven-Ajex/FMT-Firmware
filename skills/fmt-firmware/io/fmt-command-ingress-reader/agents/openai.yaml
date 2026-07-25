@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT Command Ingress Reader"
+  short_description: "Inspect FMT pilot, GCS, auto command ingress"
+  default_prompt: "Use $fmt-command-ingress-reader to inspect how pilot and mission commands enter FMT."

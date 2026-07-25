@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT Topic Bus Reader"
+  short_description: "Inspect FMT uMCN topic bus semantics"
+  default_prompt: "Use $fmt-topic-bus-reader to analyze FMT uMCN topic bus semantics."

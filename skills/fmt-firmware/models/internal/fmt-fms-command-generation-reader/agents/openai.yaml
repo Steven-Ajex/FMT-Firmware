@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT FMS Command Generation Reader"
+  short_description: "Analyze FMT mc_fms command generation"
+  default_prompt: "Use $fmt-fms-command-generation-reader to analyze how FMT mc_fms generates control commands."

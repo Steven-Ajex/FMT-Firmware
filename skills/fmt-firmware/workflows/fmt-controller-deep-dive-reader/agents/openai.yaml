@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT Controller Deep Dive Reader"
+  short_description: "Deep analysis of FMT controller structure"
+  default_prompt: "Use $fmt-controller-deep-dive-reader to analyze the FMT controller structure and outputs."

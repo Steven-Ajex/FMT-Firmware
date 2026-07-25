@@ -1,0 +1,4 @@
+interface:
+  display_name: "FMT FMS Interface Reader"
+  short_description: "Inspect FMT FMS topics, period, and boundary"
+  default_prompt: "Use $fmt-fms-interface-reader to inspect the FMT FMS firmware boundary."
